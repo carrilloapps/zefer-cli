@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/carrilloapps/zefer/main/app/icon.svg" alt="Zefer" width="80" height="80" />
+
 # zefer-cli
 
 **The zefer encryption tool — now for your terminal.**
