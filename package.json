@@ -4,7 +4,7 @@
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
-    "zefer": "./dist/index.js"
+    "zefer": "dist/index.js"
   },
   "exports": {
     ".": "./dist/index.js"
@@ -54,8 +54,16 @@
   "bugs": {
     "url": "https://github.com/carrilloapps/zefer-cli/issues"
   },
-  "os": ["linux", "darwin", "win32"],
-  "cpu": ["x64", "arm64", "ia32"],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "ia32"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },
