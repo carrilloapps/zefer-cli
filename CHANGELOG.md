@@ -5,6 +5,20 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-04-19
+
+### Fixed
+
+- **`npx zefer-cli`** — added `zefer-cli` as a second bin entry so `npx zefer-cli <command>` resolves correctly. Global install still provides the `zefer` command.
+
+### Added
+
+- **GitHub Actions** — `ci.yml` runs typecheck + build + encrypt/decrypt roundtrip smoke test on Node.js 20 and 22 on every push and PR. `publish.yml` publishes to npm automatically when a GitHub Release is created.
+- **`docs/RELEASING.md`** — complete release guide: npm Automation token setup, step-by-step version workflow, versioning rules.
+- **Cross-links with zefer web app** — READMEs, CLAUDE.md files, and badges now link both projects together.
+
+[1.0.1]: https://github.com/carrilloapps/zefer-cli/compare/v1.0.0...v1.0.1
+
 ## [1.0.0] - 2026-04-18
 
 ### New

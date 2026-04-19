@@ -15,6 +15,7 @@ CLI companion to [zefer.carrillo.app](https://zefer.carrillo.app). Encrypt and d
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Built with Ink](https://img.shields.io/badge/Built%20with-Ink-61dafb?style=flat-square&logo=react&logoColor=000)](https://github.com/vadimdemedes/ink)
 [![Web App](https://img.shields.io/badge/Web%20App-zefer.carrillo.app-22c55e?style=flat-square)](https://zefer.carrillo.app)
+[![Web Repo](https://img.shields.io/badge/GitHub-zefer-181717?style=flat-square&logo=github)](https://github.com/carrilloapps/zefer)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-22c55e?style=flat-square)](docs/CONTRIBUTING.md)
 [![GitHub stars](https://img.shields.io/github/stars/carrilloapps/zefer-cli?style=flat-square&color=22c55e)](https://github.com/carrilloapps/zefer-cli/stargazers)
 
@@ -159,6 +160,15 @@ All `.zefer` files follow the same binary format used by the web app:
 
 ```bash
 npm install -g zefer-cli
+```
+
+The installed command is **`zefer`** (short, no suffix):
+
+```bash
+zefer encrypt document.pdf -p mypassword
+zefer decrypt document.pdf.zefer -p mypassword
+zefer keygen
+zefer info secret.zefer
 ```
 
 Or run without installing:

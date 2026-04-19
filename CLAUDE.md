@@ -149,8 +149,10 @@ The `NPM_TOKEN` secret must be set in GitHub → Settings → Secrets → `NPM_T
 
 ## Related project
 
-The web app at `/home/carrilloapps/Desarrollo/Nextjs/zefer` (GitHub: `carrilloapps/zefer`) is the canonical reference for:
+The web app at `/home/carrilloapps/Desarrollo/Nextjs/zefer` (GitHub: `carrilloapps/zefer`, live: `zefer.carrillo.app`) is the canonical reference for:
 - Binary format specification
 - Cryptographic parameters
 - Security metadata schema (`ZeferMeta`)
 - Feature parity
+
+**Cross-compatibility rule**: always verify that a file encrypted by the CLI decrypts in the browser, and vice versa, before merging any change to the crypto or format layer.

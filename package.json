@@ -1,10 +1,11 @@
 {
   "name": "zefer-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
-    "zefer": "dist/index.js"
+    "zefer": "dist/index.js",
+    "zefer-cli": "dist/index.js"
   },
   "exports": {
     ".": "./dist/index.js"
