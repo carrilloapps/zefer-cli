@@ -156,7 +156,46 @@ All `.zefer` files follow the same binary format used by the web app:
 
 ## Quick Start
 
-### Install
+### Option 1 — Standalone binary (no Node.js required)
+
+Download the prebuilt binary for your platform from the [latest release](https://github.com/carrilloapps/zefer-cli/releases/latest):
+
+| Platform | File |
+|---|---|
+| Linux x64 | `zefer-linux-x64` |
+| Linux ARM64 | `zefer-linux-arm64` |
+| macOS Intel | `zefer-macos-x64` |
+| macOS Apple Silicon | `zefer-macos-arm64` |
+| Windows x64 | `zefer-win-x64.exe` |
+
+**Linux / macOS:**
+```bash
+# Download (replace with your platform)
+curl -L https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-linux-x64 -o zefer
+chmod +x zefer
+
+# Run directly
+./zefer --help
+
+# Or install system-wide
+sudo mv zefer /usr/local/bin/zefer
+zefer --help
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-win-x64.exe -OutFile zefer.exe
+.\zefer.exe --help
+```
+
+**Verify the download** using `checksums.txt` from the same release:
+```bash
+sha256sum -c checksums.txt
+```
+
+---
+
+### Option 2 — Via npm (requires Node.js 20+)
 
 ```bash
 npm install -g zefer-cli
@@ -177,7 +216,9 @@ Or run without installing:
 npx zefer-cli encrypt document.pdf -p mypassword
 ```
 
-### From source
+---
+
+### Option 3 — From source
 
 ```bash
 git clone https://github.com/carrilloapps/zefer-cli.git

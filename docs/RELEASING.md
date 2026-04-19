@@ -118,6 +118,26 @@ github.com/carrilloapps/zefer-cli/actions
 
 ---
 
+## Binary build pipeline
+
+Binaries are built automatically by `binaries.yml` on the same release event. The pipeline:
+
+1. `npm run build` → `dist/index.js` (ESM for npm)
+2. `npm run build:cjs` → `dist/index.mjs` (tsup, all deps bundled, `react-devtools-core` stubbed)
+3. `bun build --compile dist/index.mjs --target bun-<platform>` → standalone binary per platform
+
+The Bun runtime is embedded in each binary — end users need nothing pre-installed.
+
+**Toolchain:** tsup (esbuild) → Bun compile. pkg was evaluated but crashes on yoga-layout's WebAssembly initialization.
+
+**To build locally:**
+```bash
+# Requires Bun — https://bun.sh
+npm run build:cjs
+node scripts/build-binaries.mjs
+# → binaries/zefer-linux-x64, zefer-macos-*, zefer-win-x64.exe, checksums.txt
+```
+
 ## What CI checks on every push
 
 The `ci.yml` workflow runs on every push and PR to `main`:

@@ -5,6 +5,24 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-04-19
+
+### Added
+
+- **Standalone binaries** — prebuilt executables for Linux x64/ARM64, macOS Intel/Apple Silicon, and Windows x64. No Node.js or npm required. Download from [GitHub Releases](https://github.com/carrilloapps/zefer-cli/releases).
+- **`npm run build:cjs`** — builds `dist/index.mjs` (all deps bundled inline) for the binary pipeline.
+- **`npm run build:binary`** — builds all platform binaries locally (requires Bun).
+- **`scripts/build-binaries.mjs`** — build script that cross-compiles with `bun build --compile` for all targets.
+- **`tsup.binary.config.ts`** — tsup config for the binary bundle (ESM, no splitting, `react-devtools-core` stubbed).
+- **`.github/workflows/binaries.yml`** — GitHub Actions workflow that builds and uploads binaries to every release.
+- **`binaries/checksums.txt`** — SHA-256 checksums for verifying downloads.
+
+### Changed
+
+- README Quick Start section restructured into three options: binary download, npm, and source.
+
+[1.0.2]: https://github.com/carrilloapps/zefer-cli/compare/v1.0.1...v1.0.2
+
 ## [1.0.1] - 2026-04-19
 
 ### Fixed

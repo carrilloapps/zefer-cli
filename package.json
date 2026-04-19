@@ -1,6 +1,6 @@
 {
   "name": "zefer-cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
@@ -19,6 +19,8 @@
   ],
   "scripts": {
     "build": "tsup",
+    "build:cjs": "tsup --config tsup.binary.config.ts",
+    "build:binary": "npm run build:cjs && node scripts/build-binaries.mjs",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",

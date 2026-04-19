@@ -1,0 +1,66 @@
+name: Build binaries
+
+# Triggers on the same event as publish.yml.
+# Builds standalone binaries for all platforms and attaches them to the release.
+# No Node.js, no npm required on the end-user's machine.
+#
+# Toolchain:
+#   tsup  → dist/index.mjs (ESM bundle, all deps inlined, devtools stubbed)
+#   bun   → per-platform binary (embeds its own Bun runtime)
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build and upload binaries
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # required to upload release assets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build ESM bundle (npm package)
+        run: npm run build
+
+      - name: Build ESM bundle for binary (all deps inlined)
+        run: npm run build:cjs
+
+      - name: Build binaries for all platforms
+        run: node scripts/build-binaries.mjs
+        env:
+          BUN_BIN: bun
+
+      - name: List binaries
+        run: ls -lh binaries/
+
+      - name: Upload binaries to release
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            binaries/zefer-linux-x64 \
+            binaries/zefer-linux-arm64 \
+            binaries/zefer-macos-x64 \
+            binaries/zefer-macos-arm64 \
+            "binaries/zefer-win-x64.exe" \
+            binaries/checksums.txt \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
