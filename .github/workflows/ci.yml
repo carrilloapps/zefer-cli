@@ -1,7 +1,7 @@
 name: CI
 
 # Runs on every push and pull request.
-# Verifies that the project typechecks and builds correctly.
+# Verifies typecheck, build, and the full smoke test suite.
 
 on:
   push:
@@ -10,8 +10,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Typecheck and build
+  test:
+    name: Test (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -34,18 +34,5 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Build
-        run: npm run build
-
-      - name: Smoke test — help
-        run: node dist/index.js --help
-
-      - name: Smoke test — keygen
-        run: node dist/index.js keygen --mode hex --length 32
-
-      - name: Smoke test — encrypt and decrypt roundtrip
-        run: |
-          echo "zefer CI smoke test" > /tmp/ci_test.txt
-          node dist/index.js encrypt /tmp/ci_test.txt -p "ci-test-pass" -o /tmp/ci_test.zefer
-          node dist/index.js decrypt /tmp/ci_test.zefer -p "ci-test-pass" -o /tmp/ci_test_dec.txt --force
-          diff /tmp/ci_test.txt /tmp/ci_test_dec.txt
+      - name: Smoke tests (26 checks)
+        run: npm test

@@ -1,6 +1,6 @@
 {
   "name": "zefer-cli",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
@@ -18,30 +18,62 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
-    "build:cjs": "tsup --config tsup.binary.config.ts",
-    "build:binary": "npm run build:cjs && node scripts/build-binaries.mjs",
-    "dev": "tsx src/index.ts",
+    "───── Development ─────": "",
+    "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+
+    "───── Build ─────": "",
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "build:cjs": "tsup --config tsup.binary.config.ts",
+    "build:all": "npm run build && npm run build:cjs",
+
+    "───── Binaries ─────": "",
+    "build:binary": "npm run build:cjs && node scripts/build-binaries.mjs",
+    "build:binary:linux-x64": "npm run build:cjs && node scripts/build-binaries.mjs --target linux-x64",
+    "build:binary:linux-arm64": "npm run build:cjs && node scripts/build-binaries.mjs --target linux-arm64",
+    "build:binary:macos-x64": "npm run build:cjs && node scripts/build-binaries.mjs --target macos-x64",
+    "build:binary:macos-arm64": "npm run build:cjs && node scripts/build-binaries.mjs --target macos-arm64",
+    "build:binary:win-x64": "npm run build:cjs && node scripts/build-binaries.mjs --target win-x64",
+    "build:binary:current": "npm run build:cjs && node scripts/build-binaries.mjs --current",
+
+    "───── Quality ─────": "",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm run build"
+    "clean": "node scripts/clean.mjs",
+    "verify": "npm run typecheck && npm run build && node dist/index.js --version",
+    "test": "node scripts/test.mjs",
+
+    "───── Release ─────": "",
+    "postversion": "git push origin main --tags",
+    "prepublishOnly": "npm run verify",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major",
+    "release:gh": "node scripts/release-gh.mjs"
   },
   "keywords": [
     "zefer",
     "encryption",
-    "decrypt",
+    "decryption",
     "encrypt",
+    "decrypt",
     "aes-256-gcm",
     "pbkdf2",
     "cli",
     "security",
     "crypto",
+    "cryptography",
     "file-encryption",
     "text-encryption",
     "ink",
     "terminal",
     "offline",
-    "zero-knowledge"
+    "zero-knowledge",
+    "privacy",
+    "secret",
+    "password",
+    "standalone",
+    "binary"
   ],
   "author": {
     "name": "Jose Carrillo",
@@ -57,18 +89,20 @@
   "bugs": {
     "url": "https://github.com/carrilloapps/zefer-cli/issues"
   },
-  "os": [
-    "linux",
-    "darwin",
-    "win32"
-  ],
-  "cpu": [
-    "x64",
-    "arm64",
-    "ia32"
-  ],
+  "funding": {
+    "type": "individual",
+    "url": "https://www.buymeacoffee.com/carrilloapps"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "sideEffects": false,
+  "os": ["linux", "darwin", "win32"],
+  "cpu": ["x64", "arm64", "ia32"],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "dependencies": {
     "chalk": "^5.3.0",

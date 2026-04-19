@@ -22,12 +22,16 @@ import { DecryptApp, type DecryptOptions } from "./commands/decrypt.js";
 import { KeygenApp, type KeygenOptions } from "./commands/keygen.js";
 import { InfoApp } from "./commands/info.js";
 import { promptPassword, promptText, promptConfirm } from "./utils/prompt.js";
+import { createRequire } from "module";
 import type { CompressionMethod } from "./lib/compression.js";
 import type { KeygenMode } from "./lib/keygen.js";
 
+const _require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = _require("../package.json") as { version: string };
+
 // ─── Version ───
 
-const VERSION = "1.0.0";
+const VERSION = PKG_VERSION;
 
 // ─── Output after stdout-printed content ───
 

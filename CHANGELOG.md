@@ -5,6 +5,42 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-04-19
+
+### Added
+
+- **Standalone binaries for all platforms** — no Node.js or npm required:
+  - `zefer-linux-x64`, `zefer-linux-arm64`
+  - `zefer-macos-x64` (Intel), `zefer-macos-arm64` (Apple Silicon)
+  - `zefer-win-x64.exe`
+  - `checksums.txt` (SHA-256 for each binary)
+- **Version reads from `package.json`** — `zefer --version` always reports the correct installed version.
+- **Complete npm script suite:**
+  - `build:watch` — tsup watch mode for development
+  - `build:cjs` — ESM bundle with all deps inlined (used by binary builder)
+  - `build:all` — builds both ESM (npm) and CJS (binary) bundles
+  - `build:binary` — builds all platform binaries
+  - `build:binary:linux-x64|linux-arm64|macos-x64|macos-arm64|win-x64` — single platform
+  - `build:binary:current` — builds binary for the current machine only
+  - `clean` — removes `dist/` and `binaries/`
+  - `verify` — typecheck + build + version check (gates npm publish)
+  - `test` — 26-check smoke test suite
+  - `release:patch|minor|major` — bump version (auto-pushes tag via `postversion`)
+  - `release:gh` — create GitHub release (triggers automated npm publish + binary build)
+- **`scripts/test.mjs`** — 26 smoke tests: version, help, all keygen modes, encrypt/decrypt round-trips (text, file, gzip), wrong passphrase, hint/note visibility.
+- **`scripts/clean.mjs`** — cross-platform artifact cleanup (no rimraf needed).
+- **`scripts/release-gh.mjs`** — creates GitHub release, triggers both `publish.yml` and `binaries.yml`.
+- **`scripts/build-binaries.mjs`** — now supports `--target <id>` and `--current` flags for per-platform builds.
+- **`package.json` best practices** — added `publishConfig`, `funding`, `sideEffects: false`, `engines.npm`.
+- **CI updated** — uses `npm test` (26 smoke checks) instead of inline shell commands.
+
+### Changed
+
+- `prepublishOnly` now runs `npm run verify` (typecheck + build + version check).
+- `dev` now uses `tsx watch` for hot-reload during development.
+
+[1.1.0]: https://github.com/carrilloapps/zefer-cli/compare/v1.0.2...v1.1.0
+
 ## [1.0.2] - 2026-04-19
 
 ### Added
