@@ -1,6 +1,6 @@
 {
   "name": "zefer-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
@@ -21,13 +21,11 @@
     "───── Development ─────": "",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-
     "───── Build ─────": "",
     "build": "tsup",
     "build:watch": "tsup --watch",
     "build:cjs": "tsup --config tsup.binary.config.ts",
     "build:all": "npm run build && npm run build:cjs",
-
     "───── Binaries ─────": "",
     "build:binary": "npm run build:cjs && node scripts/build-binaries.mjs",
     "build:binary:linux-x64": "npm run build:cjs && node scripts/build-binaries.mjs --target linux-x64",
@@ -36,13 +34,11 @@
     "build:binary:macos-arm64": "npm run build:cjs && node scripts/build-binaries.mjs --target macos-arm64",
     "build:binary:win-x64": "npm run build:cjs && node scripts/build-binaries.mjs --target win-x64",
     "build:binary:current": "npm run build:cjs && node scripts/build-binaries.mjs --current",
-
     "───── Quality ─────": "",
     "typecheck": "tsc --noEmit",
     "clean": "node scripts/clean.mjs",
     "verify": "npm run typecheck && npm run build && node dist/index.js --version",
     "test": "node scripts/test.mjs",
-
     "───── Release ─────": "",
     "postversion": "git push origin main --tags",
     "prepublishOnly": "npm run verify",
@@ -98,8 +94,16 @@
     "registry": "https://registry.npmjs.org/"
   },
   "sideEffects": false,
-  "os": ["linux", "darwin", "win32"],
-  "cpu": ["x64", "arm64", "ia32"],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "ia32"
+  ],
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"

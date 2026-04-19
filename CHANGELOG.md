@@ -5,6 +5,17 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-04-19
+
+### Changed
+
+- npm install is now the **recommended** install method (Option 1) — standalone binary is Option 2.
+- README Quick Start restructured: npm first (with npx), binaries second with per-platform download links and commands.
+- Removed `publish.yml` GitHub Actions workflow — npm publish is done manually with `npm publish --otp=XXXXX`.
+- `docs/RELEASING.md` updated to reflect manual publish flow.
+
+[1.1.1]: https://github.com/carrilloapps/zefer-cli/compare/v1.1.0...v1.1.1
+
 ## [1.1.0] - 2026-04-19
 
 ### Added

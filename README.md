@@ -156,52 +156,13 @@ All `.zefer` files follow the same binary format used by the web app:
 
 ## Quick Start
 
-### Option 1 — Standalone binary (no Node.js required)
-
-Download the prebuilt binary for your platform from the [latest release](https://github.com/carrilloapps/zefer-cli/releases/latest):
-
-| Platform | File |
-|---|---|
-| Linux x64 | `zefer-linux-x64` |
-| Linux ARM64 | `zefer-linux-arm64` |
-| macOS Intel | `zefer-macos-x64` |
-| macOS Apple Silicon | `zefer-macos-arm64` |
-| Windows x64 | `zefer-win-x64.exe` |
-
-**Linux / macOS:**
-```bash
-# Download (replace with your platform)
-curl -L https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-linux-x64 -o zefer
-chmod +x zefer
-
-# Run directly
-./zefer --help
-
-# Or install system-wide
-sudo mv zefer /usr/local/bin/zefer
-zefer --help
-```
-
-**Windows (PowerShell):**
-```powershell
-Invoke-WebRequest -Uri https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-win-x64.exe -OutFile zefer.exe
-.\zefer.exe --help
-```
-
-**Verify the download** using `checksums.txt` from the same release:
-```bash
-sha256sum -c checksums.txt
-```
-
----
-
-### Option 2 — Via npm (requires Node.js 20+)
+### Option 1 — Via npm ✦ recommended
 
 ```bash
 npm install -g zefer-cli
 ```
 
-The installed command is **`zefer`** (short, no suffix):
+The command is **`zefer`** (no suffix):
 
 ```bash
 zefer encrypt document.pdf -p mypassword
@@ -214,6 +175,47 @@ Or run without installing:
 
 ```bash
 npx zefer-cli encrypt document.pdf -p mypassword
+```
+
+---
+
+### Option 2 — Standalone binary (no Node.js required)
+
+Download the prebuilt binary for your platform from the [latest release](https://github.com/carrilloapps/zefer-cli/releases/latest):
+
+| Platform | File | Download |
+|---|---|---|
+| Linux x64 | `zefer-linux-x64` | [↓ Download](https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-linux-x64) |
+| Linux ARM64 | `zefer-linux-arm64` | [↓ Download](https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-linux-arm64) |
+| macOS Intel | `zefer-macos-x64` | [↓ Download](https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-macos-x64) |
+| macOS Apple Silicon | `zefer-macos-arm64` | [↓ Download](https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-macos-arm64) |
+| Windows x64 | `zefer-win-x64.exe` | [↓ Download](https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-win-x64.exe) |
+
+**Linux / macOS:**
+```bash
+curl -L https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-linux-x64 -o zefer
+chmod +x zefer
+sudo mv zefer /usr/local/bin/zefer   # install system-wide (optional)
+zefer --help
+```
+
+**macOS Apple Silicon:**
+```bash
+curl -L https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-macos-arm64 -o zefer
+chmod +x zefer
+sudo mv zefer /usr/local/bin/zefer
+zefer --help
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri https://github.com/carrilloapps/zefer-cli/releases/latest/download/zefer-win-x64.exe -OutFile zefer.exe
+.\zefer.exe --help
+```
+
+**Verify integrity** with the `checksums.txt` included in each release:
+```bash
+curl -L https://github.com/carrilloapps/zefer-cli/releases/latest/download/checksums.txt | sha256sum -c --ignore-missing
 ```
 
 ---

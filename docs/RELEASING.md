@@ -6,32 +6,15 @@ This document covers the complete release process for zefer-cli, including the o
 
 ---
 
-## One-time setup: npm Automation Token
+## Publishing to npm
 
-Publishing from GitHub Actions requires an npm **Automation token** — unlike regular tokens, it bypasses OTP so CI can publish without human interaction.
+npm publishing is done manually from the terminal — no GitHub Actions token required.
 
-### 1. Generate the token on npm
+```bash
+npm publish --otp=XXXXXX   # enter the 6-digit code from your authenticator
+```
 
-1. Go to **npmjs.com → Account → Access Tokens**
-2. Click **Generate New Token → Granular Access Token**
-3. Set:
-   - **Token name**: `zefer-cli GitHub Actions`
-   - **Expiration**: No expiration (or 1 year — your preference)
-   - **Packages and scopes**: Select `zefer-cli`, permission **Read and write**
-   - **Organizations**: none
-4. Click **Generate token** and copy it immediately
-
-> If you prefer a classic token: **Generate New Token → Classic Token → Type: Automation**
-
-### 2. Add the token as a GitHub Secret
-
-1. Go to **github.com/carrilloapps/zefer-cli → Settings → Secrets and variables → Actions**
-2. Click **New repository secret**
-3. Name: `NPM_TOKEN`
-4. Value: paste the token from step 1
-5. Click **Add secret**
-
-That's it. The workflow reads `${{ secrets.NPM_TOKEN }}` automatically.
+The `prepublishOnly` script runs `typecheck + build + verify` automatically before publishing.
 
 ---
 
@@ -86,30 +69,23 @@ git commit --amend --no-edit
 git push origin main --tags
 ```
 
-### Step 4 — Create the GitHub Release
+### Step 4 — Publish to npm manually
 
 ```bash
-# With GitHub CLI (recommended — auto-generates notes from commits)
-gh release create v1.0.1 --generate-notes --title "v1.0.1"
-
-# Or manually in GitHub UI:
-# github.com/carrilloapps/zefer-cli/releases/new
-# → Choose tag: v1.0.1
-# → Target: main
-# → Generate release notes
-# → Publish release
+npm publish --otp=XXXXXX
 ```
 
-### Step 5 — GitHub Actions publishes automatically
+Open your authenticator app, enter the 6-digit OTP. Takes 10 seconds.
 
-The `publish.yml` workflow triggers on `release: published` and:
+### Step 5 — Create the GitHub Release (triggers binary builds)
 
-1. Checks out the code
-2. Runs `npm run typecheck`
-3. Runs `npm run build`
-4. Runs `npm publish --access public --provenance`
+```bash
+npm run release:gh
+# or:
+gh release create v1.1.0 --generate-notes --title "v1.1.0"
+```
 
-The `--provenance` flag links the published package to the exact GitHub Actions run that built it — verifiable at npmjs.com.
+The `binaries.yml` workflow triggers automatically and uploads the standalone binaries for all platforms to the release.
 
 You can monitor the run at:
 ```
