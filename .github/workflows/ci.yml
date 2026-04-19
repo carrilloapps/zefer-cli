@@ -1,0 +1,51 @@
+name: CI
+
+# Runs on every push and pull request.
+# Verifies that the project typechecks and builds correctly.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: ["20", "22"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test — help
+        run: node dist/index.js --help
+
+      - name: Smoke test — keygen
+        run: node dist/index.js keygen --mode hex --length 32
+
+      - name: Smoke test — encrypt and decrypt roundtrip
+        run: |
+          echo "zefer CI smoke test" > /tmp/ci_test.txt
+          node dist/index.js encrypt /tmp/ci_test.txt -p "ci-test-pass" -o /tmp/ci_test.zefer
+          node dist/index.js decrypt /tmp/ci_test.zefer -p "ci-test-pass" -o /tmp/ci_test_dec.txt --force
+          diff /tmp/ci_test.txt /tmp/ci_test_dec.txt

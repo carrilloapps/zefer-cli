@@ -129,6 +129,24 @@ export function FooApp(opts: FooOptions) {
 6. Writing to stdout before Ink exits — use `globalThis.__zefer_stdout_content` pattern for text-mode decrypt
 7. Forgetting `--force` check before `fs.writeFileSync` to avoid silently overwriting files
 
+## CI / CD
+
+Two GitHub Actions workflows:
+
+| File | Trigger | What it does |
+|---|---|---|
+| `.github/workflows/ci.yml` | Push / PR to `main` | Typecheck + build + smoke tests on Node 20 & 22 |
+| `.github/workflows/publish.yml` | GitHub Release published | Typecheck + build + `npm publish --provenance` |
+
+**To release:**
+1. `npm version patch|minor|major` — bumps `package.json`, commits, tags
+2. Update `CHANGELOG.md` + `git commit --amend --no-edit`
+3. `git push origin main --tags`
+4. `gh release create v<version> --generate-notes`
+5. GitHub Actions publishes automatically — no OTP needed (uses Automation token `NPM_TOKEN` secret)
+
+The `NPM_TOKEN` secret must be set in GitHub → Settings → Secrets → `NPM_TOKEN` (npm Automation token). See `docs/RELEASING.md` for setup steps.
+
 ## Related project
 
 The web app at `/home/carrilloapps/Desarrollo/Nextjs/zefer` (GitHub: `carrilloapps/zefer`) is the canonical reference for:

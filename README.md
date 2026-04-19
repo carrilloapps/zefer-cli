@@ -9,6 +9,7 @@
 CLI companion to [zefer.carrillo.app](https://zefer.carrillo.app). Encrypt and decrypt `.zefer` files directly from the command line using AES-256-GCM. 100% offline, cross-platform, fully compatible with the web app.
 
 [![npm](https://img.shields.io/npm/v/zefer-cli?style=flat-square&color=22c55e)](https://www.npmjs.com/package/zefer-cli)
+[![CI](https://img.shields.io/github/actions/workflow/status/carrilloapps/zefer-cli/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/carrilloapps/zefer-cli/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/carrilloapps/zefer-cli?style=flat-square&color=22c55e)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -451,6 +452,7 @@ docs/
   ARCHITECTURE.md     # Technical deep-dive
   CONTRIBUTING.md     # Development setup + conventions
   SECURITY.md         # Threat model + cryptographic details
+  RELEASING.md        # npm token setup, GitHub Actions, version workflow
 ```
 
 ## Security Model

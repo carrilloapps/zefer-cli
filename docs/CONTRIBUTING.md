@@ -1,6 +1,6 @@
 # Contributing
 
-> [README](../README.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · **Contributing**
+> [README](../README.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · **Contributing** · [Releasing](RELEASING.md)
 
 Thank you for your interest in contributing to zefer-cli. Please read the [Code of Conduct](../CODE_OF_CONDUCT.md) before participating.
 
@@ -122,13 +122,14 @@ Security options always live inside the **encrypted payload** (`ZeferMeta`), nev
 
 ## Releasing a New Version
 
-1. Update `CHANGELOG.md` — add new version entry with date
-2. Update `version` in `package.json`
-3. Run `npm run build` — verify clean build
-4. Commit: `git commit -m "chore: release v<version>"`
-5. Tag: `git tag v<version>`
-6. Push: `git push origin main --tags`
-7. Publish: `npm publish`
+Publishing is automated via GitHub Actions. See the full process in [docs/RELEASING.md](RELEASING.md).
+
+**Quick summary:**
+1. `npm version patch|minor|major`
+2. Update `CHANGELOG.md`, then `git commit --amend --no-edit`
+3. `git push origin main --tags`
+4. `gh release create v<version> --generate-notes`
+5. GitHub Actions publishes to npm automatically
 
 ## Security Contributions
 
