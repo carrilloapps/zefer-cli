@@ -384,6 +384,45 @@ zefer keygen --quiet -n 5                     # raw values for piping
 
 ---
 
+### `zefer mcp` — MCP server
+
+Exposes **every zefer capability as [Model Context Protocol](https://modelcontextprotocol.io) tools** over stdio, so any MCP-compatible client (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, custom agents) can encrypt, decrypt, generate and analyze locally. Dependency-free JSON-RPC — works in the npm install and in every standalone binary.
+
+```jsonc
+// Client configuration (e.g. .mcp.json, claude_desktop_config.json)
+{
+  "mcpServers": {
+    "zefer": { "command": "zefer", "args": ["mcp"] }
+  }
+}
+```
+
+| Tool | What it does |
+|---|---|
+| `zefer_encrypt` | Encrypt text or a file into `.zefer` (all options: dual key, reveal key, TTL, question, compression, IPs…) |
+| `zefer_decrypt` | Decrypt a `.zefer` file — text returned inline, files written to disk |
+| `zefer_keygen` | Generate scored keys — 7 modes + advanced options, sorted strongest first |
+| `zefer_analyze_password` | Full strength report: entropy, 4 attack scenarios, NIST/OWASP/AES-128/post-quantum compliance |
+| `zefer_inspect` | Deep `.zefer` analysis without the passphrase: structure, entropy, SHA-256, KDF resistance, observations |
+
+**Smart detection** — the binary knows how it was launched:
+
+- `zefer mcp` → MCP server (explicit)
+- spawned with **no arguments + piped stdin** (how MCP clients start servers) → MCP server (automatic)
+- a human terminal (TTY) → regular CLI, always
+
+**Example tool call** (what your agent sends under the hood):
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"zefer_encrypt",
+ "arguments":{"text":"api_key=abc123","passphrase":"my-strong-pass",
+              "outputPath":"secret.zefer","ttlMinutes":1440,"compression":"gzip"}}}
+```
+
+Everything runs locally — no network, no telemetry, passphrases never leave the machine.
+
+---
+
 ### `zefer analyze`
 
 Full security report for any password — parity with the web `/generator` analyzer.

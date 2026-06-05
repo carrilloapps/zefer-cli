@@ -44,6 +44,26 @@ process.on("exit", () => {
   }
 });
 
+// ─── MCP mode detection ───
+//
+// Explicit: `zefer mcp`
+// Auto:     launched with no arguments and stdin is a pipe — exactly how MCP
+//           clients (Claude Code, Cursor, etc.) spawn stdio servers. A human
+//           in a terminal always has a TTY stdin, so `zefer` alone still
+//           prints help.
+
+const rawArgs = process.argv.slice(2);
+const wantsHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+const isMcpMode =
+  (rawArgs[0] === "mcp" && !wantsHelp) ||
+  (rawArgs.length === 0 && !process.stdin.isTTY);
+
+if (isMcpMode) {
+  const { startMcpServer } = await import("./mcp/server.js");
+  await startMcpServer(PKG_VERSION);
+  process.exit(0);
+}
+
 // ─── Root program ───
 
 const program = new Command();
@@ -297,6 +317,27 @@ program
       // Auto-exit after rendering static info
       setTimeout(() => process.exit(0), 50);
     });
+  });
+
+// ─── mcp (handled above before commander; registered here for --help) ───
+
+program
+  .command("mcp")
+  .description("Start the MCP server (stdio) — exposes all zefer capabilities as Model Context Protocol tools")
+  .addHelpText(
+    "after",
+    `
+Tools exposed: zefer_encrypt, zefer_decrypt, zefer_keygen, zefer_analyze_password, zefer_inspect
+
+Client config (Claude Code / Cursor / any MCP client):
+  { "mcpServers": { "zefer": { "command": "zefer", "args": ["mcp"] } } }
+
+Auto-detection: launching the binary with no arguments and piped stdin
+(how MCP clients spawn servers) also starts MCP mode.
+`
+  )
+  .action(() => {
+    /* unreachable — intercepted before commander */
   });
 
 // ─── Parse ───
