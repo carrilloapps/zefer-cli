@@ -389,6 +389,8 @@ zefer keygen --quiet -n 5                     # raw values for piping
 
 Exposes **every zefer capability as [Model Context Protocol](https://modelcontextprotocol.io) tools** over stdio, so any MCP-compatible client (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, custom agents) can encrypt, decrypt, generate and analyze locally. Dependency-free JSON-RPC — works in the npm install and in every standalone binary.
 
+Full integration guide (all clients, transports, tool schemas, troubleshooting): [docs/MCP.md](docs/MCP.md)
+
 ```jsonc
 // Client configuration (e.g. .mcp.json, claude_desktop_config.json)
 
