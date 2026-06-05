@@ -391,9 +391,18 @@ Exposes **every zefer capability as [Model Context Protocol](https://modelcontex
 
 ```jsonc
 // Client configuration (e.g. .mcp.json, claude_desktop_config.json)
+
+// Option A — global install (npm install -g zefer-cli)
 {
   "mcpServers": {
     "zefer": { "command": "zefer", "args": ["mcp"] }
+  }
+}
+
+// Option B — via npx, no install required
+{
+  "mcpServers": {
+    "zefer": { "command": "npx", "args": ["-y", "zefer-cli", "mcp"] }
   }
 }
 ```

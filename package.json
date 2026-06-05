@@ -69,7 +69,11 @@
     "secret",
     "password",
     "standalone",
-    "binary"
+    "binary",
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "ai-agents"
   ],
   "author": {
     "name": "Jose Carrillo",

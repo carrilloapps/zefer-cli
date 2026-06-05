@@ -330,7 +330,8 @@ program
 Tools exposed: zefer_encrypt, zefer_decrypt, zefer_keygen, zefer_analyze_password, zefer_inspect
 
 Client config (Claude Code / Cursor / any MCP client):
-  { "mcpServers": { "zefer": { "command": "zefer", "args": ["mcp"] } } }
+  global install:  { "mcpServers": { "zefer": { "command": "zefer", "args": ["mcp"] } } }
+  via npx:         { "mcpServers": { "zefer": { "command": "npx", "args": ["-y", "zefer-cli", "mcp"] } } }
 
 Auto-detection: launching the binary with no arguments and piped stdin
 (how MCP clients spawn servers) also starts MCP mode.
