@@ -347,33 +347,68 @@ zefer decrypt secret.zefer -p "reveal-passphrase" -a "firulais"
 zefer keygen [options]
 
 Options:
-  -m, --mode <mode>   alpha | hex | uuid | secure | unicode  (default: secure)
-  -l, --length <n>    Length in characters  (default: 64)
-  -n, --count <n>     Number of keys to generate  (default: 1)
+  -m, --mode <mode>      unicode | secure | alpha | hex | base58 | pin | uuid  (default: secure)
+  -l, --length <n>       Length in characters, 1-2048  (default: 64)
+  -n, --count <n>        Number of keys, 1-50  (default: 1)
+  --exclude-ambiguous    Exclude ambiguous characters (0 O 1 l I)
+  --exclude <chars>      Exclude specific characters from the alphabet
+  --require-all          Guarantee lower/upper/digit/symbol when available
+  --no-repeats           Never emit the same character twice in a row
+  --group <n>            Insert a dash every N characters (cosmetic)
+  --sort                 Sort keys from strongest to weakest score
+  --quiet                Raw values only (pipe-friendly, no analysis)
 ```
+
+Every key is scored (strength bar + effective bits), exactly like the web `/generator`.
 
 | Mode | Character set | Best for |
 |---|---|---|
-| `secure` | Base64url (`A-Z a-z 0-9 - _`) | General passphrases |
-| `alpha` | Printable ASCII + symbols | High-entropy passphrases |
+| `unicode` | Latin, Cyrillic, Arabic, CJK, Greek, Emoji (~668 symbols) | Maximum entropy |
+| `secure` | Latin + symbols + accented (189 symbols) | General passphrases |
+| `alpha` | `A-Z a-z 0-9` | Alphanumeric tokens |
 | `hex` | `0-9 a-f` | Tokens, hashes |
-| `uuid` | UUID v4 format | Unique identifiers |
-| `unicode` | Latin, Cyrillic, Arabic, CJK, Emoji | Maximum entropy |
+| `base58` | Bitcoin alphabet (no `0 O I l`) | Keys read aloud or hand-copied |
+| `pin` | `0-9` | Devices, cards, safes |
+| `uuid` | UUID v7 (RFC 9562) | Unique identifiers |
 
 **Examples:**
 
 ```bash
-zefer keygen                        # 64-char secure key
-zefer keygen -m hex -l 32           # 32-char hex token
-zefer keygen -m alpha -l 128        # 128-char printable ASCII
-zefer keygen -m uuid                # UUID v4
-zefer keygen -m unicode -l 24       # 24 Unicode characters
-zefer keygen -n 5 -l 32             # 5 keys at once
+zefer keygen                                  # 64-char secure key, scored
+zefer keygen -m base58 -l 24 --group 6        # XqaiTi-CBpTQC-3Em58S-X9u4XQ
+zefer keygen -m pin -l 8                      # numeric PIN
+zefer keygen -n 10 --sort                     # 10 keys, strongest first
+zefer keygen --exclude-ambiguous --require-all
+zefer keygen --quiet -n 5                     # raw values for piping
 ```
 
 ---
 
+### `zefer analyze`
+
+Full security report for any password — parity with the web `/generator` analyzer.
+
+```
+zefer analyze [password]      # prompted securely if omitted
+```
+
+Reports: strength score, estimated alphabet, maximum/effective entropy, total
+keyspace, post-quantum entropy (Grover), crack time across 4 attack scenarios
+(throttled login 10²/s → nation-state 10¹⁵/s), compliance checks (NIST SP
+800-63B, OWASP ≥64 bits, long-term ≥100 bits, AES-128, post-quantum) and
+weakness detection (leaked lists, sequences, keyboard patterns, repeats, years).
+100% local — the password never leaves your machine.
+
+---
+
 ### `zefer info`
+
+Shows the public header **plus a deep security analysis** (parity with the web
+`/analyzer`): structural integrity (chunk-framing walk, corruption detection),
+encrypted chunk count, estimated content size, ciphertext randomness (Shannon
+entropy), salt/IV hex, file SHA-256 fingerprint, a passphrase-resistance table
+derived from the file's PBKDF2 iterations, and severity-tagged security
+observations — all without the passphrase.
 
 Show the public header of a `.zefer` file without decrypting it.
 

@@ -20,11 +20,12 @@ import * as fs from "fs";
 import { EncryptApp, type EncryptOptions } from "./commands/encrypt.js";
 import { DecryptApp, type DecryptOptions } from "./commands/decrypt.js";
 import { KeygenApp, type KeygenOptions } from "./commands/keygen.js";
+import { AnalyzeApp } from "./commands/analyze.js";
 import { InfoApp } from "./commands/info.js";
 import { promptPassword, promptText, promptConfirm } from "./utils/prompt.js";
 import { createRequire } from "module";
 import type { CompressionMethod } from "./lib/compression.js";
-import type { KeygenMode } from "./lib/keygen.js";
+import { MODES, type KeygenMode } from "./lib/passwords.js";
 
 const _require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = _require("../package.json") as { version: string };
@@ -225,23 +226,63 @@ program
 
 program
   .command("keygen")
-  .description("Generate a cryptographically secure key")
+  .description("Generate cryptographically secure keys (web-app parity)")
   .option(
     "-m, --mode <mode>",
-    "Mode: alpha|hex|uuid|secure|unicode (default: secure)",
+    "Mode: unicode|secure|alpha|hex|base58|pin|uuid (default: secure)",
     "secure"
   )
-  .option("-l, --length <n>", "Key length in characters (default: 64)", (v) => parseInt(v, 10), 64)
-  .option("-n, --count <n>", "Number of keys to generate (default: 1)", (v) => parseInt(v, 10), 1)
+  .option("-l, --length <n>", "Key length in characters, 1-2048 (default: 64)", (v) => parseInt(v, 10), 64)
+  .option("-n, --count <n>", "Number of keys to generate, 1-50 (default: 1)", (v) => parseInt(v, 10), 1)
+  .option("--exclude-ambiguous", "Exclude ambiguous characters (0 O 1 l I)", false)
+  .option("--exclude <chars>", "Exclude specific characters from the alphabet")
+  .option("--require-all", "Guarantee lower/upper/digit/symbol when the alphabet has them", false)
+  .option("--no-repeats", "Never emit the same character twice in a row")
+  .option("--group <n>", "Insert a dash every N characters (cosmetic)", (v) => parseInt(v, 10), 0)
+  .option("--sort", "Sort keys from strongest to weakest score", false)
+  .option("--quiet", "Print raw keys only (pipe-friendly, no analysis)", false)
   .action((options) => {
+    const validModes = MODES.map((m) => m.key);
+    if (!validModes.includes(options.mode)) {
+      console.error(`Error: invalid mode "${options.mode}". Valid: ${validModes.join("|")}`);
+      process.exit(1);
+    }
     const keygenOpts: KeygenOptions = {
       mode: options.mode as KeygenMode,
-      length: options.length,
-      count: options.count,
+      length: Math.min(2048, Math.max(1, options.length)),
+      count: Math.min(50, Math.max(1, options.count)),
+      excludeAmbiguous: options.excludeAmbiguous,
+      exclude: options.exclude,
+      requireAll: options.requireAll,
+      noRepeats: options.repeats === false, // commander inverts --no-repeats
+      group: options.group,
+      sort: options.sort,
+      quiet: options.quiet,
     };
 
     const { waitUntilExit } = render(React.createElement(KeygenApp, keygenOpts));
     waitUntilExit().then(() => {}).catch(() => {});
+  });
+
+// ─── analyze ───
+
+program
+  .command("analyze")
+  .description("Full security report for a password (entropy, attack scenarios, compliance)")
+  .argument("[password]", "Password to analyze (prompted securely if omitted)")
+  .action(async (password: string | undefined) => {
+    let value = password ?? "";
+    if (!value) {
+      value = await promptPassword("Password to analyze: ");
+      if (!value) {
+        console.error("Error: a password is required");
+        process.exit(1);
+      }
+    }
+    const { waitUntilExit } = render(React.createElement(AnalyzeApp, { password: value }));
+    waitUntilExit().then(() => {
+      setTimeout(() => process.exit(0), 50);
+    });
   });
 
 // ─── info ───

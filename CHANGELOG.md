@@ -5,6 +5,17 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-05
+
+### Added
+
+- **`zefer analyze [password]`** — full security report for any password (prompted securely if omitted): score, estimated alphabet, maximum/effective entropy, total keyspace, post-quantum entropy, crack time across 4 attack scenarios (10^2-10^15 guesses/s), compliance checks (NIST SP 800-63B, OWASP >=64 bits, long-term >=100 bits, AES-128, post-quantum Grover), comparison vs an average human password and weakness detection — parity with the web /generator analyzer
+- **`zefer info` deep analysis** — structural integrity (chunk-framing walk, corruption/truncation detection), encrypted chunk count, estimated content size, ciphertext randomness (Shannon entropy), salt/IV hex, file SHA-256 fingerprint, passphrase-resistance table derived from the file's PBKDF2 iterations, and severity-tagged security observations — parity with the web /analyzer
+- **`zefer keygen` web parity** — shared engine with the web app: 7 modes (`unicode|secure|alpha|hex|base58|pin|uuid`), every key scored with a strength bar and effective bits, plus advanced options: `--exclude-ambiguous`, `--exclude <chars>`, `--require-all`, `--no-repeats`, `--group <n>`, `--sort` (strongest first) and `--quiet` (raw values for piping)
+
+### Changed
+
+- **Breaking**: `keygen` charsets now match the web app exactly — `secure` is Latin + symbols + accents (was base64url), `alpha` is strictly alphanumeric (was ASCII + symbols), `unicode` uses the curated web pool, and `uuid` generates UUID v7 (RFC 9562, was v4). Use `--quiet` for script-friendly output
 ## [1.1.1] - 2026-04-19
 
 ### Changed
