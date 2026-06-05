@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/carrilloapps/zefer/main/app/icon.svg" alt="Zefer" width="80" height="80" />
+<img src="https://zefer.carrillo.app/icon.svg" alt="Zefer" width="80" height="80" />
 
 # zefer-cli
 
@@ -56,6 +56,7 @@ zefer-cli brings the full power of [zefer](https://zefer.carrillo.app) to your t
 - **Cross-compatible** — `.zefer` files work identically in CLI and browser
 - **All security features** — dual key, reveal key, secret question, IP restriction, expiration, attempt limits
 - **Scriptable** — pipe-friendly, all options via flags, CI-friendly output mode
+- **AI-ready** — built-in [MCP server](#zefer-mcp--mcp-server) exposes every capability to Claude, Cursor, Windsurf, VS Code and any MCP client
 
 ## Relationship to zefer
 
@@ -112,12 +113,12 @@ A file encrypted with `zefer-cli` can be decrypted at [zefer.carrillo.app](https
 </td>
 <td width="50%">
 
-**Key Generator**
-- 5 modes: `alpha`, `hex`, `uuid`, `secure`, `unicode`
-- Configurable length (default: 64 characters)
-- Generate multiple keys at once (`--count`)
-- Rejection sampling — no modulo bias
-- OS-level CSPRNG via `crypto.randomBytes`
+**Key Generator & AI**
+- 7 modes: `unicode`, `secure`, `alpha`, `hex`, `base58`, `pin`, `uuid` (v7)
+- Per-key strength score + advanced options (exclusions, classes, grouping)
+- `zefer analyze` — full password security report
+- **MCP server** (`zefer mcp`) — every capability as AI-agent tools
+- Rejection sampling — no modulo bias, OS-level CSPRNG
 
 </td>
 </tr>
