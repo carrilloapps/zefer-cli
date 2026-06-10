@@ -5,6 +5,14 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-06-09
+
+### Fixed
+
+- **Broken npm package (1.2.0 was unusable)** — the published 1.2.0 tarball shipped only `dist/index.js` because the `files` allowlist in `package.json` was a hardcoded two-file list. When the MCP server landed in 1.2.0, tsup began code-splitting the ESM bundle into `dist/chunk-*.js` (shared code, statically imported by `index.js`) and `dist/server-*.js` (the lazily `import()`-ed MCP server). Neither was included in `files`, so every install crashed on first invocation — even `zefer --version` — with `ERR_MODULE_NOT_FOUND: Cannot find package './chunk-XXXXXXXX.js'`. The bug was invisible locally because the chunks exist on disk after a build; only a clean install from the tarball exposes it. `files` now uses `dist/*.js` + `dist/*.js.map` globs so all current and future code-split chunks are published, while the binary build's `dist/index.mjs` stays excluded. See [`docs/POSTMORTEM-1.2.0.md`](docs/POSTMORTEM-1.2.0.md). No code, crypto, or `.zefer` format changes — 1.2.1 is feature-identical to the intended 1.2.0.
+
+[1.2.1]: https://github.com/carrilloapps/zefer-cli/compare/v1.2.0...v1.2.1
+
 ## [1.2.0] - 2026-06-05
 
 ### Added
@@ -17,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking**: `keygen` charsets now match the web app exactly — `secure` is Latin + symbols + accents (was base64url), `alpha` is strictly alphanumeric (was ASCII + symbols), `unicode` uses the curated web pool, and `uuid` generates UUID v7 (RFC 9562, was v4). Use `--quiet` for script-friendly output
+
+> **Note:** 1.2.0 was published to npm with a broken tarball (missing code-split chunks) and is unusable. Use 1.2.1 instead.
+
+[1.2.0]: https://github.com/carrilloapps/zefer-cli/compare/v1.1.1...v1.2.0
+
 ## [1.1.1] - 2026-04-19
 
 ### Changed
