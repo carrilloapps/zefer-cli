@@ -4,7 +4,14 @@ This file provides context for Claude Code when working in this repository.
 
 ## What this project is
 
-zefer-cli is the official CLI companion to [zefer.carrillo.app](https://zefer.carrillo.app) ([repo](https://github.com/carrilloapps/zefer)). It encrypts and decrypts `.zefer` files using AES-256-GCM with PBKDF2-SHA256, 100% locally.
+zefer-cli is the official companion to [zefer.carrillo.app](https://zefer.carrillo.app) ([repo](https://github.com/carrilloapps/zefer)). It encrypts and decrypts `.zefer` files using AES-256-GCM with PBKDF2-SHA256, 100% locally.
+
+It ships **three channels over one shared core** (`src/lib/*`):
+- **CLI** — `src/index.ts` (Commander + Ink), the package `bin`.
+- **MCP server** — `src/mcp/server.ts`, headless stdio JSON-RPC (`zefer mcp`).
+- **Library** — `src/lib.ts`, a side-effect-free programmatic API exported as ESM + CJS with types (`exports['.']`). No Ink/React/Commander. See `docs/LIBRARY.md`.
+
+Any change to the crypto/format layer must stay in parity across all three channels and the web app.
 
 The web app lives at `/home/carrilloapps/Desarrollo/Nextjs/zefer` (locally). Files produced by this CLI are byte-for-byte compatible with the web app.
 
@@ -21,13 +28,15 @@ The web app lives at `/home/carrilloapps/Desarrollo/Nextjs/zefer` (locally). Fil
 ## Key files
 
 ```
-src/index.ts                  — Commander setup, all command wiring
+src/index.ts                  — Commander setup, all command wiring (CLI channel)
+src/lib.ts                    — programmatic library entry point (library channel; re-exports src/lib/*)
+src/mcp/server.ts             — MCP stdio server (MCP channel)
 src/lib/crypto.ts             — AES-256-GCM + PBKDF2 (Node.js port)
 src/lib/chunked-crypto.ts     — 16 MB chunked encryption (Node.js port)
 src/lib/compression.ts        — gzip/deflate via zlib (Node.js port)
 src/lib/zefer.ts              — ZEFB3/ZEFR3 encode/decode (Node.js port)
 src/lib/progress.ts           — Progress stage tracking
-src/lib/keygen.ts             — CSPRNG key generation, 5 modes
+src/lib/passwords.ts          — CSPRNG key generation (7 modes) + password strength analysis
 src/lib/attempts.ts           — ~/.zefer/attempts.json (replaces localStorage)
 src/utils/terminal.ts         — Unicode/ASCII capability detection
 src/utils/prompt.ts           — Cross-platform password input
@@ -40,7 +49,9 @@ src/commands/info.tsx         — Ink UI for info command
 ## Build and run
 
 ```bash
-npm run build        # tsup → dist/index.js
+npm run build        # tsup (CLI → dist/index.js) + tsup --config tsup.lib.config.ts (library → dist/lib.{js,cjs} + .d.ts)
+npm run build:cli    # CLI/MCP bundle only
+npm run build:lib    # library bundle only (ESM + CJS + types)
 npm run dev          # tsx src/index.ts (no build step)
 npm run typecheck    # tsc --noEmit (should have 0 errors)
 

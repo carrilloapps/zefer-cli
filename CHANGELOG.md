@@ -5,6 +5,34 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-12
+
+### Added
+
+- **Programmatic library — zefer is now usable as a third channel** (alongside the CLI and the MCP server). A new side-effect-free entry point (`src/lib.ts` → `dist/lib.js` / `dist/lib.cjs`) exposes the full core as an importable API with TypeScript declarations (`dist/lib.d.ts` / `dist/lib.d.cts`), shipped in both **ESM** and **CommonJS**. It contains no Ink, React, Commander or `process.argv` parsing, so importing it has zero side effects — safe in any Node 20+ runtime, including services and AWS Lambda. Files stay byte-for-byte compatible across all channels and the web app.
+
+  ```ts
+  import { encodeZefer, decodeZefer, generateWithOptions, analyzePassword } from "zefer-cli";
+  // or: const { encodeZefer } = require("zefer-cli");
+  ```
+
+  Full surface exported: format (`encodeZefer`, `decodeZefer`, `parseFile`), AES-256-GCM + PBKDF2 primitives (`encrypt`/`decrypt`, `encryptRaw`, `decryptFromBinary`, `deriveKey`, `combineDualKeys`, `hashAnswer`, `benchmarkDevice`), 16 MB chunked crypto (`chunkedEncrypt`, `chunkedDecryptToBuffer`, `CHUNK_SIZE`), compression (`compressBytes`, `decompressBytes`, `smartCompress`), the 7-mode key generator and password analysis (`generateValue`, `generateWithOptions`, `MODES`, `analyzePassword`, …) and the attempt counter. All security layers — dual passphrase, reveal key (ZEFR3), secret question, TTL, IP allowlist, max attempts, compression — are available programmatically. Full reference and Lambda guidance: [`docs/LIBRARY.md`](docs/LIBRARY.md).
+- New build scripts `build:cli` and `build:lib`; `build` now produces both the CLI/MCP bundle and the dual-format library + types.
+
+### Changed
+
+- `exports["."]` now resolves to the **library** (with `import`/`require` conditions and bundled types), and `main`/`module`/`types` were added. Previously `exports["."]` pointed at the CLI bundle, which was not importable (it would parse `process.argv` and render the terminal UI). The `bin` entries (`zefer`, `zefer-cli`) are unchanged — the CLI is reached through the bin exactly as before.
+
+### Removed
+
+- Dead module `src/lib/keygen.ts` — an orphaned, superseded key generator (5 modes, no advanced options) that no code imported. Key generation lives in `src/lib/passwords.ts` (7 modes: `unicode|secure|alpha|hex|base58|pin|uuid`), shared by the CLI, the MCP server and the library. Stale references in `CLAUDE.md` and `docs/CONTRIBUTING.md` were corrected.
+
+### Tests
+
+- Smoke suite expanded from 26 to 96 checks, validating **all three channels** at runtime and the full **cross-channel matrix** — a `.zefer` produced by any channel decrypts in the other two. Adds the real MCP stdio server driven over JSON-RPC (all 5 tools), ESM ⇄ CJS library parity, every security layer and every low-level primitive.
+
+[1.3.0]: https://github.com/carrilloapps/zefer-cli/compare/v1.2.1...v1.3.0
+
 ## [1.2.1] - 2026-06-09
 
 ### Fixed

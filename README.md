@@ -35,6 +35,7 @@ CLI companion to [zefer.carrillo.app](https://zefer.carrillo.app). Encrypt and d
 - [File Format Compatibility](#file-format-compatibility)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
+- [Library (programmatic API)](#library-programmatic-api)
 - [Security Options](#security-options)
 - [Scripting & Automation](#scripting--automation)
 - [Cross-platform Support](#cross-platform-support)
@@ -103,9 +104,10 @@ A file encrypted with `zefer-cli` can be decrypted at [zefer.carrillo.app](https
 <td width="50%">
 
 **Developer Experience**
+- Three channels, one core: **CLI**, **MCP server** and **programmatic library**
+- Library: import as ESM or CommonJS — `encodeZefer`, `decodeZefer`, keygen, analysis
 - Pipe-friendly: `stdin` / `stdout` support
 - Non-interactive mode for CI/CD scripts
-- Real-time progress bar with Ink (React CLI)
 - Cross-platform: Linux, macOS, Windows
 - ASCII fallback for `cmd.exe` and legacy terminals
 - `--verbose` for detailed operation info
@@ -483,6 +485,88 @@ Secret question, IP restriction, expiration, and max attempts
 are inside the encrypted payload and cannot be read without the passphrase.
 ```
 
+---
+
+## Library (programmatic API)
+
+Beyond the CLI and the MCP server, `zefer-cli` ships a **programmatic library**:
+the same core, importable from your own Node.js code (services, AWS Lambda,
+build scripts). No Ink, no Commander, no side effects on import — and files stay
+byte-for-byte compatible across all channels and the web app.
+
+The package exports both **ESM** and **CommonJS** builds with full TypeScript types.
+
+```ts
+// ESM / TypeScript
+import { encodeZefer, decodeZefer, generateWithOptions, analyzePassword } from "zefer-cli";
+
+// CommonJS
+const { encodeZefer, decodeZefer } = require("zefer-cli");
+```
+
+**Encrypt → decrypt round-trip:**
+
+```ts
+import { encodeZefer, decodeZefer } from "zefer-cli";
+import { readFile, writeFile } from "node:fs/promises";
+
+// Encrypt text (ZEFB3 binary, gzip-compressed)
+const buf = await encodeZefer({
+  content: "api_key=abc123",
+  passphrase: "a-strong-passphrase",
+  fileName: null,
+  expiresAt: 0,            // 0 = never; else Unix ms
+  compression: "gzip",
+  iterations: 600_000,     // always explicit — the library never auto-benchmarks
+});
+await writeFile("secret.zefer", buf);
+
+// Decrypt (pass the raw bytes via `rawBytes` for ZEFB3/ZEFR3)
+const bytes = await readFile("secret.zefer");
+const res = await decodeZefer(bytes.toString("utf-8"), "a-strong-passphrase", { rawBytes: bytes });
+if (res.ok) {
+  console.log(res.payload.content);     // text mode
+  // res.payload.fileData                // file mode (Buffer)
+}
+```
+
+**Encrypt a file (file mode):**
+
+```ts
+const data = await readFile("photo.jpg");
+const buf = await encodeZefer({
+  fileData: data,
+  fileName: "photo.jpg",
+  fileType: "image/jpeg",
+  passphrase: "a-strong-passphrase",
+  expiresAt: 0,
+  iterations: 600_000,
+});
+```
+
+**Key generation & password analysis (same engine as `zefer keygen` / `zefer analyze`):**
+
+```ts
+import { generateWithOptions, generateValue, analyzePassword, MODES } from "zefer-cli";
+
+const key   = generateWithOptions("base58", 24, { groupSize: 6, excludeAmbiguous: true });
+const uuid  = generateValue("uuid", 0);
+const score = analyzePassword(key).score;   // 0–4
+```
+
+> **Lambda / microservice notes**
+> - `encodeZefer`/`decodeZefer` work in-memory (AES runs in 16 MB chunks, but the
+>   full input/output stays in RAM). Peak ≈ input + output size — size your
+>   function ≥ 512 MB for ~100 MB payloads.
+> - Always pass an explicit `iterations` (default `600_000`). The `-i 0`
+>   auto-benchmark is a CLI-only convenience and is **not** in the library path,
+>   so there is no cold-start PBKDF2 calibration.
+
+Full API reference, every exported function and type, and advanced examples:
+**[docs/LIBRARY.md](docs/LIBRARY.md)**
+
+---
+
 ## Security Options
 
 All security metadata is stored **inside the encrypted payload** — invisible to anyone without the passphrase.
@@ -562,10 +646,15 @@ Password input is always hidden — either via `setRawMode` (Unix/Windows Termin
 
 ```
 src/
+  index.ts            # CLI channel — Commander setup + command wiring (→ bin)
+  lib.ts              # Library channel — programmatic entry (re-exports src/lib/*)
+  mcp/
+    server.ts         # MCP channel — stdio JSON-RPC server
   commands/
     encrypt.tsx       # Encrypt command — Ink UI + file I/O
     decrypt.tsx       # Decrypt command — Ink UI + all security checks
-    keygen.tsx        # Key generator — 5 modes
+    keygen.tsx        # Key generator — 7 modes
+    analyze.tsx       # Password security report
     info.tsx          # Public header viewer
   lib/
     crypto.ts         # AES-256-GCM + PBKDF2 — Node.js port of zefer/app/lib/crypto.ts
@@ -573,7 +662,7 @@ src/
     compression.ts    # Gzip/Deflate — Node.js zlib port
     zefer.ts          # ZEFB3/ZEFR3 format encode/decode — Node.js port
     progress.ts       # Real-time progress tracking (same stage weights as web)
-    keygen.ts         # CSPRNG key generation (5 modes)
+    passwords.ts      # CSPRNG key generation (7 modes) + password analysis
     attempts.ts       # Attempt counter (~/.zefer/attempts.json)
   ui/
     Header.tsx        # CLI header component
@@ -584,12 +673,15 @@ src/
     format.ts         # File sizes, dates, durations
     prompt.ts         # Password input (cross-platform)
     terminal.ts       # Unicode / ASCII capability detection
-  index.ts            # Commander setup + command wiring
 dist/
-  index.js            # Compiled ESM bundle (50 KB, includes shebang)
+  index.js            # CLI/MCP bundle (ESM, includes shebang) — the bin
+  lib.js / lib.cjs    # Library bundles (ESM + CommonJS)
+  lib.d.ts / lib.d.cts# TypeScript declarations
 docs/
   ARCHITECTURE.md     # Technical deep-dive
   CONTRIBUTING.md     # Development setup + conventions
+  LIBRARY.md          # Programmatic library / SDK reference
+  MCP.md              # MCP integration guide
   SECURITY.md         # Threat model + cryptographic details
   RELEASING.md        # npm token setup, GitHub Actions, version workflow
 ```

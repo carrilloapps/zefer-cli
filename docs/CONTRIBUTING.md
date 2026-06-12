@@ -115,10 +115,15 @@ Security options always live inside the **encrypted payload** (`ZeferMeta`), nev
 
 ## Adding a New Keygen Mode
 
-1. Add the mode to `KeygenMode` union in `src/lib/keygen.ts`
-2. Add a case to the `switch` in `generateKey()`
-3. Add it to the `--mode` option description in `src/index.ts`
-4. Update the README keygen modes table
+Key generation lives in `src/lib/passwords.ts` (shared by the CLI, the MCP
+server and the library).
+
+1. Add the mode to the `KeygenMode` union in `src/lib/passwords.ts`
+2. Add its alphabet to `CHARSETS` and an entry to `MODES`
+3. Verify `generateValue()` / `generateWithOptions()` handle it
+4. Add it to the `--mode` option description in `src/index.ts` (CLI) and to the
+   `mode` enum in the `zefer_keygen` tool in `src/mcp/server.ts` (MCP)
+5. Update the README keygen modes table
 
 ## Releasing a New Version
 
