@@ -123,6 +123,7 @@ export function DecryptApp(opts: DecryptOptions) {
           secondPassphrase: opts.secondPassphrase,
           questionAnswer: opts.questionAnswer,
           rawBytes,
+          maxDecompressSize: 0, // CLI: no size cap — process any local file, show progress
           onProgress: {
             deriving: tracker.deriving.bind(tracker),
             derivingDone: tracker.derivingDone.bind(tracker),

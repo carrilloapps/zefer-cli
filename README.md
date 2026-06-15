@@ -242,6 +242,13 @@ npm run build        # Build
 
 ## Commands
 
+> **No install? Use `npx`.** Every command below is shown as `zefer <command>`
+> (global install). To run the exact same command **without installing**, swap
+> `zefer` for `npx zefer-cli` — e.g. `npx zefer-cli encrypt document.pdf -p mypassword`.
+> npx downloads the package on first use and caches it. Pass `-y` to skip the
+> install prompt in scripts (`npx -y zefer-cli …`), and pin a version with
+> `npx zefer-cli@1.3.0 …` for reproducible runs.
+
 ### `zefer encrypt`
 
 ```
@@ -296,6 +303,10 @@ zefer encrypt --text "Top secret note" -p mypassword -o note.zefer
 # Pipe from stdin
 echo "my secret" | zefer encrypt -p mypassword -o secret.zefer
 cat document.pdf | zefer encrypt -p mypassword -o document.zefer
+
+# Without installing — run via npx
+npx zefer-cli encrypt report.pdf -p mypassword
+echo "my secret" | npx -y zefer-cli encrypt -p mypassword -o secret.zefer
 ```
 
 ---
@@ -340,6 +351,10 @@ zefer decrypt note.zefer -p mypassword | grep "important"
 
 # Use the reveal key instead of the main passphrase
 zefer decrypt secret.zefer -p "reveal-passphrase" -a "firulais"
+
+# Without installing — run via npx
+npx zefer-cli decrypt secret.zefer -p mypassword
+npx -y zefer-cli decrypt note.zefer -p mypassword | grep "important"
 ```
 
 ---
@@ -383,6 +398,10 @@ zefer keygen -m pin -l 8                      # numeric PIN
 zefer keygen -n 10 --sort                     # 10 keys, strongest first
 zefer keygen --exclude-ambiguous --require-all
 zefer keygen --quiet -n 5                     # raw values for piping
+
+# Without installing — run via npx
+npx zefer-cli keygen -m base58 -l 24 --group 6
+npx -y zefer-cli keygen --quiet -n 5          # raw values for piping
 ```
 
 ---
@@ -445,6 +464,12 @@ Full security report for any password — parity with the web `/generator` analy
 zefer analyze [password]      # prompted securely if omitted
 ```
 
+```bash
+# Without installing — run via npx (omit the password to be prompted securely)
+npx zefer-cli analyze
+npx -y zefer-cli analyze "Tr0ub4dor&3"
+```
+
 Reports: strength score, estimated alphabet, maximum/effective entropy, total
 keyspace, post-quantum entropy (Grover), crack time across 4 attack scenarios
 (throttled login 10²/s → nation-state 10¹⁵/s), compliance checks (NIST SP
@@ -467,6 +492,9 @@ Show the public header of a `.zefer` file without decrypting it.
 
 ```bash
 zefer info secret.zefer
+
+# Without installing — run via npx
+npx zefer-cli info secret.zefer
 ```
 
 ```

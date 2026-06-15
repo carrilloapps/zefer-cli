@@ -242,7 +242,12 @@ type DecodeError =
 ```
 
 Pass binary bytes via `options.rawBytes`. `options` also accepts
-`secondPassphrase`, `questionAnswer` and `onProgress`.
+`secondPassphrase`, `questionAnswer`, `onProgress` and `maxDecompressSize`.
+
+`maxDecompressSize` is a decompression-bomb safety cap, in bytes, that applies
+to the **library channel only** and defaults to **512 MB**. It guards services
+that decrypt untrusted, attacker-supplied input. Pass `0` to disable it (the CLI
+and MCP channels do exactly this, since they operate on local, trusted files).
 
 ### `parseFile(fileContent, rawBytes?): ParsedFile | null`
 

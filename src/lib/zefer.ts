@@ -13,7 +13,7 @@
 import { performance } from "perf_hooks";
 import { hashAnswer, combineDualKeys, decryptFromBase64 } from "./crypto.js";
 import { chunkedEncrypt, chunkedDecryptToBuffer, CHUNK_SIZE } from "./chunked-crypto.js";
-import { compressBytes, decompressBytes, type CompressionMethod } from "./compression.js";
+import { compressBytes, decompressBytes, MAX_DECOMPRESS_SIZE, type CompressionMethod } from "./compression.js";
 import { getAttempts, setAttempts, removeAttempts } from "./attempts.js";
 
 const MAGIC_TEXT = "ZEFER3";
@@ -404,6 +404,13 @@ export async function decodeZefer(
     secondPassphrase?: string;
     questionAnswer?: string;
     rawBytes?: Buffer;
+    /**
+     * Decompression-bomb cap in bytes. Defaults to {@link MAX_DECOMPRESS_SIZE}
+     * (512 MB) — the safety net for the **library** channel. Pass `0` to remove
+     * the cap entirely; the CLI and MCP channels do this so a real, locally
+     * trusted file is never rejected for being large.
+     */
+    maxDecompressSize?: number;
     onProgress?: {
       deriving: () => void;
       derivingDone: () => void;
@@ -498,7 +505,8 @@ export async function decodeZefer(
   options?.onProgress?.decompressing();
   let finalData: Buffer;
   if (header.compression !== "none") {
-    finalData = await decompressBytes(rawData, header.compression);
+    const maxDecompressSize = options?.maxDecompressSize ?? MAX_DECOMPRESS_SIZE;
+    finalData = await decompressBytes(rawData, header.compression, maxDecompressSize);
   } else {
     finalData = rawData;
   }

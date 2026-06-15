@@ -5,6 +5,19 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-15
+
+### Changed
+
+- **The 512 MB decompression cap is now library-only.** `decodeZefer`'s decompression-bomb safety limit (`MAX_DECOMPRESS_SIZE`, 512 MB) still applies by default — protecting services that decrypt untrusted, attacker-supplied input — but the **CLI** (`zefer decrypt`) and the **MCP server** (`zefer_decrypt`) now pass `maxDecompressSize: 0`, removing the cap entirely. Both channels operate on local, trusted files, so a large file is never rejected for its size; the CLI reports decryption progress as a percentage exactly as before. No `.zefer` format, crypto, or cross-compatibility change.
+
+### Added
+
+- **`decodeZefer` option `maxDecompressSize`** (bytes) — overrides the decompression-bomb cap. Defaults to 512 MB; pass `0` (or a non-finite value) to disable it. `decompressBytes` gains a matching optional `maxSize` parameter and `MAX_DECOMPRESS_SIZE` is now exported. Full reference: [`docs/LIBRARY.md`](docs/LIBRARY.md).
+- **`npx` usage examples throughout the docs** — every CLI command in the README (`encrypt`, `decrypt`, `keygen`, `analyze`, `info`) and the `claude mcp add` snippet in [`docs/MCP.md`](docs/MCP.md) now show a no-install `npx zefer-cli …` form alongside the global-install form.
+
+[1.4.0]: https://github.com/carrilloapps/zefer-cli/compare/v1.3.0...v1.4.0
+
 ## [1.3.0] - 2026-06-12
 
 ### Added

@@ -10,7 +10,16 @@ import { promisify } from "util";
 
 export type CompressionMethod = "none" | "gzip" | "deflate" | "deflate-raw";
 
-const MAX_DECOMPRESS_SIZE = 512 * 1024 * 1024; // 512 MB safety limit
+/**
+ * Default decompression-bomb safety cap (512 MB).
+ *
+ * This default applies to the **library** channel only — `decodeZefer` keeps it
+ * unless an explicit `maxDecompressSize` is provided. The CLI and MCP channels
+ * pass `0` (unlimited) so a real, locally-trusted file is never rejected for
+ * being large; progress is reported instead. Pass `0` or a non-finite value to
+ * `decompressBytes` to disable the cap.
+ */
+export const MAX_DECOMPRESS_SIZE = 512 * 1024 * 1024; // 512 MB
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -36,9 +45,15 @@ export async function compressBytes(
   }
 }
 
+/**
+ * @param maxSize Decompression-bomb cap in bytes. Defaults to
+ *   {@link MAX_DECOMPRESS_SIZE} (the library default). Pass `0` or a non-finite
+ *   value to disable the cap entirely (CLI / MCP channels).
+ */
 export async function decompressBytes(
   data: Buffer | Uint8Array,
-  method: CompressionMethod
+  method: CompressionMethod,
+  maxSize: number = MAX_DECOMPRESS_SIZE
 ): Promise<Buffer> {
   const buf = Buffer.from(data);
   let result: Buffer;
@@ -57,9 +72,10 @@ export async function decompressBytes(
     default:
       return buf;
   }
-  if (result.length > MAX_DECOMPRESS_SIZE) {
+  const capped = Number.isFinite(maxSize) && maxSize > 0;
+  if (capped && result.length > maxSize) {
     throw new Error(
-      `Decompressed output exceeds maximum allowed size (${MAX_DECOMPRESS_SIZE / 1024 / 1024} MB)`
+      `Decompressed output exceeds maximum allowed size (${maxSize / 1024 / 1024} MB)`
     );
   }
   return result;

@@ -52,6 +52,9 @@ Or one command (project scope by default; add `-s user` for global):
 
 ```bash
 claude mcp add zefer -- zefer mcp
+
+# Without installing — register the npx form instead
+claude mcp add zefer -- npx -y zefer-cli mcp
 ```
 
 ### Claude Desktop

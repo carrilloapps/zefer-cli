@@ -284,6 +284,7 @@ async function handleDecrypt(args: Record<string, unknown>) {
     secondPassphrase: args.secondPassphrase as string | undefined,
     questionAnswer: args.questionAnswer as string | undefined,
     rawBytes,
+    maxDecompressSize: 0, // MCP: no size cap — process any local file
   });
 
   if (!result.ok) return toolText(`Decryption failed: ${result.error}`, true);
