@@ -5,8 +5,8 @@
  * Output is byte-for-byte identical to the browser version.
  */
 
-import * as zlib from "zlib";
-import { promisify } from "util";
+import * as zlib from "node:zlib";
+import { promisify } from "node:util";
 
 export type CompressionMethod = "none" | "gzip" | "deflate" | "deflate-raw";
 

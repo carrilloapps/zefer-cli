@@ -58,7 +58,7 @@ function formatCrack(bits: number, gps: number): string {
   return `${value.toLocaleString()} ${bucket}`;
 }
 
-export function AnalyzeApp({ password }: { password: string }) {
+export function AnalyzeApp({ password }: Readonly<{ password: string }>) {
   const a = analyzePassword(password);
   const checks = complianceOf(a.effectiveBits, a.length);
   const ksExp = keyspaceExponent(a.effectiveBits);

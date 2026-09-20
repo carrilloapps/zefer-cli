@@ -10,23 +10,34 @@
  * Run with `npm test` (builds first). Any red line is a real regression.
  */
 
-import { execSync, spawn } from "child_process";
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { createRequire } from "module";
+import { execFileSync, spawn } from "node:child_process";
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 
 // ─── Helpers ───
 
-const BIN = "node dist/index.js";
+const BIN_ENTRY = "dist/index.js";
 let passed = 0;
 let failed = 0;
 
+/**
+ * Run the built CLI. Arguments are passed as an argv array to `execFileSync`
+ * (no shell involved), so nothing in them can ever be interpreted as a command.
+ */
 function run(args, opts = {}) {
+  if (!Array.isArray(args) || args.some((a) => typeof a !== "string")) {
+    throw new TypeError(`run() expects an array of string arguments, got: ${JSON.stringify(args)}`);
+  }
   try {
-    const out = execSync(`${BIN} ${args}`, { encoding: "utf-8", stdio: "pipe", ...opts });
+    const out = execFileSync(process.execPath, [BIN_ENTRY, ...args], {
+      encoding: "utf-8",
+      stdio: "pipe",
+      ...opts,
+    });
     return { ok: true, out };
   } catch (e) {
     return { ok: false, out: e.stdout ?? "", err: e.stderr ?? "", code: e.status };
@@ -38,7 +49,8 @@ function assert(name, condition, detail = "") {
     console.log(`  ✓  ${name}`);
     passed++;
   } else {
-    console.error(`  ✗  ${name}${detail ? `\n     ${detail}` : ""}`);
+    const explanation = detail ? `\n     ${detail}` : "";
+    console.error(`  ✗  ${name}${explanation}`);
     failed++;
   }
 }
@@ -53,16 +65,30 @@ const zef2   = join(tmp, "zefer_smoke2.zefer");
 const PASS    = "smoke-test-pass-42";
 const CONTENT = "zefer smoke test content — special chars: áéíóú 日本語 🔐";
 
+/**
+ * The canonical xkcd sample string, used purely as analyzer input to check the
+ * scoring output. It is test data, not a credential — it protects nothing.
+ */
+const ANALYZER_SAMPLE = "Tr0ub4dor&3";
+
 writeFileSync(txtIn, CONTENT, "utf-8");
 
 // ─── Ensure build is fresh ───
+//
+// npm sets `npm_execpath` to the absolute path of its own CLI for every
+// lifecycle script, so the build runs without resolving "npm" through PATH.
 
 console.log("\n  Building...");
+const npmCli = process.env.npm_execpath;
+if (!npmCli) {
+  console.error("  npm_execpath not set — run the suite with `npm test`\n");
+  process.exit(1);
+}
 try {
-  execSync("npm run build", { stdio: "pipe" });
+  execFileSync(process.execPath, [npmCli, "run", "build"], { stdio: "pipe" });
   console.log("  build OK\n");
 } catch (e) {
-  console.error("  build failed — aborting\n");
+  console.error(`  build failed — aborting: ${e.stderr?.toString().trim() || e.message}\n`);
   process.exit(1);
 }
 
@@ -71,12 +97,12 @@ try {
 console.log("  Running smoke tests\n");
 
 // 1. --version
-const ver = run("--version");
+const ver = run(["--version"]);
 assert("--version exits 0",        ver.ok);
 assert("--version prints version", ver.out.trim().match(/^\d+\.\d+\.\d+/) !== null);
 
 // 2. --help
-const help = run("--help");
+const help = run(["--help"]);
 assert("--help exits 0",           help.ok);
 assert("--help mentions encrypt",  help.out.includes("encrypt"));
 assert("--help mentions decrypt",  help.out.includes("decrypt"));
@@ -85,61 +111,61 @@ assert("--help mentions info",     help.out.includes("info"));
 
 // 3. keygen modes — all 7 (CLI validates against passwords.ts MODES)
 for (const mode of ["unicode", "secure", "alpha", "hex", "base58", "pin", "uuid"]) {
-  const kg = run(`keygen --mode ${mode} --length 32`);
+  const kg = run(["keygen", "--mode", mode, "--length", "32"]);
   assert(`keygen --mode ${mode}`, kg.ok && kg.out.trim().length > 0, kg.err);
 }
 // keygen rejects an invalid mode
-assert("keygen rejects invalid mode", !run("keygen --mode bogus").ok);
+assert("keygen rejects invalid mode", !run(["keygen", "--mode", "bogus"]).ok);
 // keygen advanced options
-const kgAdv = run("keygen --mode base58 --length 24 --group 6 --exclude-ambiguous --quiet");
+const kgAdv = run(["keygen", "--mode", "base58", "--length", "24", "--group", "6", "--exclude-ambiguous", "--quiet"]);
 assert("keygen advanced options (group/exclude/quiet)", kgAdv.ok && kgAdv.out.includes("-"));
 
 // 4. keygen --count
-const kgMulti = run("keygen --mode hex --length 16 --count 3");
+const kgMulti = run(["keygen", "--mode", "hex", "--length", "16", "--count", "3"]);
 assert("keygen --count 3 produces 3 lines", kgMulti.ok && kgMulti.out.split("\n").filter((l) => l.trim().match(/^[0-9a-f]{16}$/)).length === 3);
 
 // 5. Encrypt text mode
-const enc1 = run(`encrypt --text "${CONTENT}" -p "${PASS}" -o "${zef}"`);
+const enc1 = run(["encrypt", "--text", CONTENT, "-p", PASS, "-o", zef]);
 assert("encrypt --text exits 0",      enc1.ok, enc1.err);
 assert("encrypt produces .zefer file", existsSync(zef));
 
 // 6. Decrypt text mode → stdout
-const dec1 = run(`decrypt "${zef}" -p "${PASS}"`);
+const dec1 = run(["decrypt", zef, "-p", PASS]);
 assert("decrypt text exits 0",         dec1.ok, dec1.err);
 // stdout contains the Ink UI header + the decrypted content at the end
 assert("decrypt text content matches", dec1.out.includes(CONTENT), `got: ${dec1.out.trim().slice(0, 80)}`);
 
 // 7. Wrong passphrase → exit 1
-const decBad = run(`decrypt "${zef}" -p "WRONG_PASS"`);
+const decBad = run(["decrypt", zef, "-p", "WRONG_PASS"]);
 assert("wrong passphrase exits 1", !decBad.ok);
 
 // 8. Encrypt file mode
-const enc2 = run(`encrypt "${txtIn}" -p "${PASS}" -o "${zef2}"`);
+const enc2 = run(["encrypt", txtIn, "-p", PASS, "-o", zef2]);
 assert("encrypt file exits 0",       enc2.ok, enc2.err);
 assert("encrypt file produces .zefer", existsSync(zef2));
 
 // 9. Decrypt file mode → explicit output
-const dec2 = run(`decrypt "${zef2}" -p "${PASS}" -o "${txtOut}" --force`);
+const dec2 = run(["decrypt", zef2, "-p", PASS, "-o", txtOut, "--force"]);
 assert("decrypt file exits 0",            dec2.ok, dec2.err);
 assert("decrypt file content matches",    existsSync(txtOut) && readFileSync(txtOut, "utf-8").trim() === CONTENT.trim());
 
 // 10. info reads public header
-const info = run(`info "${zef2}"`);
+const info = run(["info", zef2]);
 assert("info exits 0",            info.ok, info.err);
 assert("info shows ZEFB3 format", info.out.includes("ZEFB3"));
 
 // 11. Encrypt with gzip compression
 const zefGzip = join(tmp, "zefer_gzip.zefer");
 const decGzip = join(tmp, "zefer_gzip_dec.txt");
-const encGzip = run(`encrypt "${txtIn}" -p "${PASS}" -c gzip -o "${zefGzip}"`);
-const decGzipR = run(`decrypt "${zefGzip}" -p "${PASS}" -o "${decGzip}" --force`);
+const encGzip = run(["encrypt", txtIn, "-p", PASS, "-c", "gzip", "-o", zefGzip]);
+const decGzipR = run(["decrypt", zefGzip, "-p", PASS, "-o", decGzip, "--force"]);
 assert("encrypt + decrypt gzip round-trip",
   encGzip.ok && decGzipR.ok && existsSync(decGzip) && readFileSync(decGzip, "utf-8").trim() === CONTENT.trim());
 
 // 12. Encrypt with hint and note → visible in info
 const zefHint = join(tmp, "zefer_hint.zefer");
-const encHint = run(`encrypt --text "secret" -p "${PASS}" --hint "my hint" --note "public note" -o "${zefHint}"`);
-const infoHint = run(`info "${zefHint}"`);
+const encHint = run(["encrypt", "--text", "secret", "-p", PASS, "--hint", "my hint", "--note", "public note", "-o", zefHint]);
+const infoHint = run(["info", zefHint]);
 assert("hint and note visible in info",
   encHint.ok && infoHint.ok && infoHint.out.includes("my hint") && infoHint.out.includes("public note"));
 
@@ -157,7 +183,7 @@ const CJS = require("../dist/lib.cjs");
 // ── MCP helper: spawn the real stdio server, send JSON-RPC, collect replies ──
 function mcpCall(requests) {
   return new Promise((resolve, reject) => {
-    const child = spawn("node", ["dist/index.js", "mcp"], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, ["dist/index.js", "mcp"], { stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
@@ -185,8 +211,8 @@ for (const [label, mod] of [["library (ESM)", ESM], ["library (CJS)", CJS]]) {
     assert(`${label} generateValue ${m}`, typeof v === "string" && v.length > 0);
   }
   const libKey = mod.generateWithOptions("base58", 24, { groupSize: 6, excludeAmbiguous: true });
-  assert(`${label} generateWithOptions base58`, libKey.replace(/-/g, "").length === 24);
-  assert(`${label} analyzePassword`, typeof mod.analyzePassword("Tr0ub4dor&3").score === "number");
+  assert(`${label} generateWithOptions base58`, libKey.replaceAll("-", "").length === 24);
+  assert(`${label} analyzePassword`, typeof mod.analyzePassword(ANALYZER_SAMPLE).score === "number");
 
   // encrypt → decrypt round-trip (ZEFB3)
   const libBuf = await mod.encodeZefer({
@@ -315,7 +341,7 @@ console.log("\n  Library — low-level primitives\n");
   // parseFile — public header without decrypting
   const hbuf = await ESM.encodeZefer({ content: "x", passphrase: PASS, fileName: null, expiresAt: 0, hint: "the-hint", iterations: iters });
   const parsed = ESM.parseFile(hbuf.toString("utf-8"), hbuf);
-  assert("lib parseFile reads public header", parsed && parsed.binary && parsed.header.hint === "the-hint");
+  assert("lib parseFile reads public header", parsed?.binary && parsed.header.hint === "the-hint");
 }
 
 console.log("\n  MCP channel (stdio JSON-RPC server)\n");
@@ -336,7 +362,7 @@ writeFileSync(libZefFile, await ESM.encodeZefer({
     init,
     { jsonrpc: "2.0", id: 2, method: "tools/list" },
     { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "zefer_keygen", arguments: { mode: "base58", length: 24, count: 2 } } },
-    { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "zefer_analyze_password", arguments: { password: "Tr0ub4dor&3" } } },
+    { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "zefer_analyze_password", arguments: { password: ANALYZER_SAMPLE } } },
     { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "zefer_encrypt", arguments: { text: MCP_TEXT, passphrase: PASS, outputPath: mcpZef, compression: "gzip", iterations: 50_000 } } },
     { jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "zefer_decrypt", arguments: { inputPath: mcpZef, passphrase: PASS } } },
     { jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "zefer_inspect", arguments: { inputPath: mcpZef } } },
@@ -377,15 +403,15 @@ console.log("\n  Cross-channel matrix\n");
   assert("library decrypts an MCP-encrypted file", b.ok && b.payload.content === MCP_TEXT);
 
   // library-encrypted (libZefText) → CLI
-  const c = run(`decrypt "${libZefText}" -p "${PASS}"`);
+  const c = run(["decrypt", libZefText, "-p", PASS]);
   assert("CLI decrypts a library-encrypted file", c.ok && c.out.includes(CONTENT), c.err);
 
   // MCP-encrypted (mcpZef, text) → CLI
-  const d = run(`decrypt "${mcpZef}" -p "${PASS}"`);
+  const d = run(["decrypt", mcpZef, "-p", PASS]);
   assert("CLI decrypts an MCP-encrypted file", d.ok && d.out.includes(MCP_TEXT), d.err);
 
   // CLI info reads a library-encrypted file's public header
-  const e = run(`info "${libZefFile}"`);
+  const e = run(["info", libZefFile]);
   assert("CLI info reads a library-encrypted file", e.ok && e.out.includes("ZEFB3"), e.err);
 }
 

@@ -11,6 +11,7 @@
  */
 
 import React from "react";
+import { randomUUID } from "node:crypto";
 import { Box, Text } from "ink";
 import {
   generateWithOptions,
@@ -37,7 +38,7 @@ export interface KeygenOptions {
 const SCORE_LABEL = ["very weak", "weak", "fair", "good", "strong"] as const;
 const SCORE_COLOR = ["red", "red", "yellow", "green", "green"] as const;
 
-function ScoreLine({ a }: { a: PasswordAnalysis }) {
+function ScoreLine({ a }: Readonly<{ a: PasswordAnalysis }>) {
   const filled = a.score + 1;
   return (
     <Text>
@@ -48,7 +49,7 @@ function ScoreLine({ a }: { a: PasswordAnalysis }) {
   );
 }
 
-export function KeygenApp(opts: KeygenOptions) {
+export function KeygenApp(opts: Readonly<KeygenOptions>) {
   const genOpts: GenerateOptions = {
     excludeAmbiguous: opts.excludeAmbiguous,
     excludeChars: opts.exclude,
@@ -57,9 +58,11 @@ export function KeygenApp(opts: KeygenOptions) {
     groupSize: opts.group,
   };
 
+  // `id` is the React key: generated values are not guaranteed unique (a 4-digit
+  // PIN collides often enough) and --sort reorders the list.
   let keys = Array.from({ length: opts.count }, () => {
     const value = generateWithOptions(opts.mode, opts.length, genOpts);
-    return { value, analysis: analyzePassword(value) };
+    return { id: randomUUID(), value, analysis: analyzePassword(value) };
   });
 
   if (opts.sort) {
@@ -74,8 +77,8 @@ export function KeygenApp(opts: KeygenOptions) {
   if (opts.quiet) {
     return (
       <Box flexDirection="column">
-        {keys.map((k, i) => (
-          <Text key={i}>{k.value}</Text>
+        {keys.map((k) => (
+          <Text key={k.id}>{k.value}</Text>
         ))}
       </Box>
     );
@@ -89,7 +92,7 @@ export function KeygenApp(opts: KeygenOptions) {
       </Box>
 
       {keys.map((k, i) => (
-        <Box key={i} flexDirection="column" marginBottom={opts.count > 1 ? 1 : 0}>
+        <Box key={k.id} flexDirection="column" marginBottom={opts.count > 1 ? 1 : 0}>
           {opts.count > 1 && <Text color="gray">#{i + 1}</Text>}
           <Text color="white">{k.value}</Text>
           <ScoreLine a={k.analysis} />

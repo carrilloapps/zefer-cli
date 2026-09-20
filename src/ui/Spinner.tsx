@@ -6,7 +6,7 @@ interface SpinnerProps {
   color?: string;
 }
 
-export function Spinner({ color = "cyan" }: SpinnerProps) {
+export function Spinner({ color = "cyan" }: Readonly<SpinnerProps>) {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {

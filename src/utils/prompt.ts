@@ -7,7 +7,7 @@
  *   - Piped stdin → read raw bytes from stdin
  */
 
-import * as readline from "readline";
+import * as readline from "node:readline";
 
 /** True when stdin supports setRawMode (Unix TTYs, Windows Terminal, PowerShell 7+). */
 function canSetRawMode(): boolean {
@@ -100,12 +100,14 @@ function promptPasswordMuted(message: string): Promise<string> {
       terminal: true,
     });
 
-    // Suppress echoed characters but allow the newline through
+    // Suppress echoed characters but allow the line break through. In terminal
+    // mode readline always hands the line break over as "\r\n", whichever key
+    // ended the line, so that is the only string worth letting past.
     (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = (s: string) => {
-      if (s === "\r\n" || s === "\n" || s === "\r") {
+      if (s === "\r\n") {
         process.stdout.write("\n");
       }
-      // All other output (the typed characters) is silently dropped
+      // Everything else (the prompt and the typed characters) is dropped
     };
 
     rl.question(message, (answer) => {
@@ -153,6 +155,6 @@ export async function promptConfirm(message: string, defaultYes = false): Promis
  */
 export async function promptInt(message: string, defaultValue: number): Promise<number> {
   const answer = await promptText(message, String(defaultValue));
-  const parsed = parseInt(answer, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
+  const parsed = Number.parseInt(answer, 10);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
 }

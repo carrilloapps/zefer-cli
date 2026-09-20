@@ -6,12 +6,12 @@
 
 import React from "react";
 import { Box, Text } from "ink";
-import * as fs from "fs";
-import * as path from "path";
-import * as nodeCrypto from "crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as nodeCrypto from "node:crypto";
 import { parseFile, type ZeferHeader } from "../lib/zefer.js";
 import { crackBucketFor, toSuperscript } from "../lib/passwords.js";
-import { formatBytes, formatDate, formatTimeRemaining } from "../utils/format.js";
+import { formatBytes } from "../utils/format.js";
 import { ICON_ARROW, ICON_SEP, ICON_ERR, ICON_OK } from "../utils/terminal.js";
 
 // ─── Deep analysis (parity with the web /analyzer, no passphrase needed) ───
@@ -33,11 +33,11 @@ function walkChunks(data: Buffer): { ok: boolean; chunks: number; ciphertext: nu
   return { ok: off === data.length && chunks > 0, chunks, ciphertext };
 }
 
-/** Shannon entropy in bits/byte (proper AES output ≈ 8.0) */
+/** Shannon entropy in bits/byte (proper AES output ≈ 8.0). Callers only pass
+ *  samples of at least 1 KB, so an empty buffer never reaches here. */
 function shannonEntropy(bytes: Buffer): number {
-  if (bytes.length === 0) return 0;
   const freq = new Array<number>(256).fill(0);
-  for (let i = 0; i < bytes.length; i++) freq[bytes[i]]++;
+  for (const byte of bytes) freq[byte]++;
   let h = 0;
   for (const f of freq) {
     if (f > 0) {
@@ -70,7 +70,33 @@ interface Field {
   color?: string;
 }
 
-function Row({ label, value, color = "white" }: Field) {
+/** Human label for the on-disk container, derived from the leading magic bytes. */
+function detectFormat(rawBytes: Buffer): string {
+  const magic = rawBytes.subarray(0, 6).toString("ascii");
+  if (magic.startsWith("ZEFB3")) return "ZEFB3 (binary, single key)";
+  if (magic.startsWith("ZEFR3")) return "ZEFR3 (binary, with reveal key)";
+  if (magic === "ZEFER3") return "ZEFER3 (legacy text)";
+  if (magic === "ZEFER2") return "ZEFER2 (legacy text)";
+  return "unknown";
+}
+
+/** Colour scale for the PBKDF2 iteration count: 1M/600k green, 300k amber, below red. */
+function iterationsColor(iterations: number): string {
+  if (iterations >= 600_000) return "green";
+  if (iterations >= 300_000) return "yellow";
+  return "red";
+}
+
+/** The security traits that are visible without the passphrase. */
+function publicFeatures(rawBytes: Buffer, header: ZeferHeader): string[] {
+  const features: string[] = [];
+  if (rawBytes.subarray(0, 5).toString("ascii") === "ZEFR3") features.push("reveal key");
+  if (header.hint) features.push("hint");
+  if (header.note) features.push("public note");
+  return features;
+}
+
+function Row({ label, value, color = "white" }: Readonly<Field>) {
   return (
     <Box>
       <Text color="gray">{label.padEnd(16)}</Text>
@@ -83,7 +109,7 @@ interface InfoAppProps {
   input: string;
 }
 
-export function InfoApp({ input }: InfoAppProps) {
+export function InfoApp({ input }: Readonly<InfoAppProps>) {
   let rawBytes: Buffer;
   let fileSize: number;
 
@@ -108,26 +134,8 @@ export function InfoApp({ input }: InfoAppProps) {
   }
 
   const { header } = parsed;
-
-  // Detect format
-  const magic = rawBytes.subarray(0, 5).toString("ascii");
-  const format =
-    magic === "ZEFB3"
-      ? "ZEFB3 (binary, single key)"
-      : magic === "ZEFR3"
-      ? "ZEFR3 (binary, with reveal key)"
-      : magic.startsWith("ZEFER")
-      ? "ZEFER3 (legacy text)"
-      : magic.startsWith("ZEFER")
-      ? "ZEFER2 (legacy text)"
-      : "unknown";
-
-  // Security features
-  const securityFeatures: string[] = [];
-  // We can only tell from the header if there's a reveal key (ZEFR3)
-  if (magic === "ZEFR3") securityFeatures.push("reveal key");
-  if (header.hint) securityFeatures.push("hint");
-  if (header.note) securityFeatures.push("public note");
+  const format = detectFormat(rawBytes);
+  const securityFeatures = publicFeatures(rawBytes, header);
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -146,7 +154,7 @@ export function InfoApp({ input }: InfoAppProps) {
         <Row
           label="Iterations"
           value={header.iterations.toLocaleString()}
-          color={header.iterations >= 600_000 ? "green" : header.iterations >= 300_000 ? "yellow" : "red"}
+          color={iterationsColor(header.iterations)}
         />
         <Row label="Compression" value={header.compression} />
 
@@ -174,40 +182,89 @@ export function InfoApp({ input }: InfoAppProps) {
   );
 }
 
+type ParsedZefer = NonNullable<ReturnType<typeof parseFile>>;
+
+interface Structure {
+  /** `null` when there is no binary block to walk (legacy text formats). */
+  ok: boolean | null;
+  chunks: number;
+  estimatedPlain: number;
+  /** Shannon entropy of a 64 KB ciphertext sample, `null` when the sample is too small. */
+  entropy: number | null;
+}
+
+/** Walk both blocks of the file and measure how random the ciphertext looks. */
+function analyzeStructure(parsed: ParsedZefer): Structure {
+  const main = parsed.binaryData ? walkChunks(parsed.binaryData) : null;
+  const reveal = parsed.revealBinaryData ? walkChunks(parsed.revealBinaryData) : null;
+
+  const sample = parsed.binaryData?.subarray(
+    44,
+    Math.min(parsed.binaryData.length, 44 + 64 * 1024)
+  );
+
+  return {
+    ok: main ? main.ok && (reveal === null || reveal.ok) : null,
+    chunks: (main?.chunks ?? 0) + (reveal?.chunks ?? 0),
+    estimatedPlain: main ? Math.max(0, main.ciphertext - 16 * main.chunks) : 0,
+    entropy: sample && sample.length >= 1024 ? shannonEntropy(sample) : null,
+  };
+}
+
+interface Observation {
+  text: string;
+  color: string;
+}
+
+/** Severity-tagged findings, mirroring the web `/analyzer` report. */
+function buildObservations(parsed: ParsedZefer, header: ZeferHeader, structure: Structure): Observation[] {
+  const { ok, entropy } = structure;
+  const candidates: [boolean, Observation][] = [
+    [ok === false, { text: "Internal structure does not match the declared format", color: "red" }],
+    [
+      entropy !== null && entropy < 7.5,
+      { text: "Ciphertext randomness is unusually low — corrupted or not real ciphertext", color: "red" },
+    ],
+    [
+      header.iterations < 600_000,
+      { text: "KDF at standard level — consider 600k or 1M iterations for sensitive data", color: "yellow" },
+    ],
+    [
+      !!header.hint,
+      { text: "Public hint visible without the passphrase — make sure it does not reveal too much", color: "yellow" },
+    ],
+    [!!header.note, { text: "Public note visible to anyone holding the file", color: "gray" }],
+    [
+      !!parsed.revealBinaryData,
+      { text: "Reveal key included: two valid passphrases can decrypt — wider access surface", color: "gray" },
+    ],
+    [
+      !!header.compression && header.compression !== "none",
+      { text: "Compression enabled: ciphertext size may hint at content compressibility", color: "gray" },
+    ],
+  ];
+  return candidates.filter(([applies]) => applies).map(([, observation]) => observation);
+}
+
 function DeepAnalysis({
   rawBytes,
   parsed,
   header,
-}: {
+}: Readonly<{
   rawBytes: Buffer;
-  parsed: NonNullable<ReturnType<typeof parseFile>>;
+  parsed: ParsedZefer;
   header: ZeferHeader;
-}) {
+}>) {
   const sha256 = nodeCrypto.createHash("sha256").update(rawBytes).digest("hex");
 
-  const main = parsed.binaryData ? walkChunks(parsed.binaryData) : null;
-  const reveal = parsed.revealBinaryData ? walkChunks(parsed.revealBinaryData) : null;
-  const structureOk = main ? main.ok && (reveal === null || reveal.ok) : null;
-  const chunks = (main?.chunks ?? 0) + (reveal?.chunks ?? 0);
-  const estimatedPlain = main ? Math.max(0, main.ciphertext - 16 * main.chunks) : 0;
-
-  const sample = parsed.binaryData
-    ? parsed.binaryData.subarray(44, Math.min(parsed.binaryData.length, 44 + 64 * 1024))
-    : null;
-  const entropy = sample && sample.length >= 1024 ? shannonEntropy(sample) : null;
+  const structure = analyzeStructure(parsed);
+  const { ok: structureOk, chunks, estimatedPlain, entropy } = structure;
 
   const guessesPerGpu = Math.max(1, Math.round(1e10 / (2 * header.iterations)));
   const fleet = guessesPerGpu * 1000;
 
-  // Security observations (severity-tagged, like the web /analyzer)
-  const obs: { text: string; color: string }[] = [];
-  if (structureOk === false) obs.push({ text: "Internal structure does not match the declared format", color: "red" });
-  if (entropy !== null && entropy < 7.5) obs.push({ text: "Ciphertext randomness is unusually low — corrupted or not real ciphertext", color: "red" });
-  if (header.iterations < 600_000) obs.push({ text: "KDF at standard level — consider 600k or 1M iterations for sensitive data", color: "yellow" });
-  if (header.hint) obs.push({ text: "Public hint visible without the passphrase — make sure it does not reveal too much", color: "yellow" });
-  if (header.note) obs.push({ text: "Public note visible to anyone holding the file", color: "gray" });
-  if (parsed.revealBinaryData) obs.push({ text: "Reveal key included: two valid passphrases can decrypt — wider access surface", color: "gray" });
-  if (header.compression && header.compression !== "none") obs.push({ text: "Compression enabled: ciphertext size may hint at content compressibility", color: "gray" });
+  const obs = buildObservations(parsed, header, structure);
+  const compressionNote = header.compression !== "none" ? " (before decompression)" : "";
 
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -223,7 +280,7 @@ function DeepAnalysis({
       {parsed.binaryData && (
         <>
           <Row label="Chunks" value={`${chunks}`} />
-          <Row label="Est. content" value={`~${formatBytes(estimatedPlain)}${header.compression !== "none" ? " (before decompression)" : ""}`} />
+          <Row label="Est. content" value={`~${formatBytes(estimatedPlain)}${compressionNote}`} />
           {entropy !== null && (
             <Row
               label="Randomness"

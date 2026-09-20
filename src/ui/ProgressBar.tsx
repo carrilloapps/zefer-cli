@@ -8,7 +8,7 @@ interface ProgressBarProps {
   showLabel?: boolean;
 }
 
-export function ProgressBar({ percent, width = 32, showLabel = true }: ProgressBarProps) {
+export function ProgressBar({ percent, width = 32, showLabel = true }: Readonly<ProgressBarProps>) {
   const clamped = Math.min(100, Math.max(0, percent));
   const filled = Math.round((clamped / 100) * width);
   const empty = width - filled;

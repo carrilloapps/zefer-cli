@@ -1,6 +1,6 @@
 {
   "name": "zefer-cli",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "CLI for Zefer — AES-256-GCM file and text encryption. Official CLI companion to zefer.carrillo.app.",
   "type": "module",
   "bin": {
@@ -55,9 +55,13 @@
     "build:binary:current": "npm run build:cjs && node scripts/build-binaries.mjs --current",
     "───── Quality ─────": "",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "clean": "node scripts/clean.mjs",
-    "verify": "npm run typecheck && npm run build && node dist/index.js --version",
-    "test": "node scripts/test.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run build && node dist/index.js --version && npm run test:coverage && npm run test:integration",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "node scripts/test.mjs",
     "───── Release ─────": "",
     "postversion": "git push origin main --tags",
     "prepublishOnly": "npm run verify",
@@ -138,10 +142,20 @@
     "react": "^18.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.3",
+    "@vitest/coverage-v8": "~4.1.11",
+    "eslint": "^10.11.0",
+    "globals": "^16.5.0",
+    "ink-testing-library": "^4.0.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "~4.1.11"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

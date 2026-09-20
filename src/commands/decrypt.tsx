@@ -7,13 +7,20 @@
 
 import React, { useEffect, useState } from "react";
 import { Box, Text, useApp } from "ink";
-import * as fs from "fs";
-import * as path from "path";
-import { decodeZefer, parseFile } from "../lib/zefer.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import {
+  decodeZefer,
+  parseFile,
+  type DecodeError,
+  type ZeferHeader,
+  type ZeferPayload,
+} from "../lib/zefer.js";
 import { createDecryptTracker, type ProgressState } from "../lib/progress.js";
 import { Header } from "../ui/Header.js";
 import { StatusLine } from "../ui/StatusLine.js";
-import { formatBytes, formatTimeRemaining, formatDate } from "../utils/format.js";
+import { formatBytes } from "../utils/format.js";
+import { sanitizeOutputName } from "../utils/paths.js";
 
 export interface DecryptOptions {
   input: string; // file path or "-" for stdin
@@ -27,9 +34,77 @@ export interface DecryptOptions {
 
 type Stage = "idle" | "reading" | "decrypting" | "writing" | "done" | "error";
 
+/** Human-readable message for every `decodeZefer` failure code. Keyed by
+ *  `DecodeError`, so a new code cannot be added without a message here. */
+const DECODE_ERRORS: Record<DecodeError, string> = {
+  wrong_passphrase: "Wrong passphrase",
+  expired: "This file has expired",
+  wrong_answer: "Wrong secret question answer",
+  max_attempts: "Maximum decryption attempts exceeded",
+  ip_blocked: "Your IP address is not in the allowlist",
+  needs_answer: "Secret question required",
+  invalid_format: "Invalid file format",
+};
+
+// ─── Pure helpers (kept out of the component so `run()` stays linear) ───
+
+/** Read the whole input — a file path, or stdin when the input is `-`. */
+async function readInput(input: string): Promise<Buffer> {
+  if (input !== "-") return fs.readFileSync(input);
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
+
+/** Throw when `outPath` exists and the user did not ask to overwrite it. */
+function assertWritable(outPath: string, force: boolean): void {
+  if (fs.existsSync(outPath) && !force) {
+    throw new Error(`Output file "${outPath}" already exists. Use --force to overwrite.`);
+  }
+}
+
+/** Write the decrypted file payload to disk. Returns the status line text. */
+function writeFilePayload(opts: DecryptOptions, fileData: Buffer, fileName: string | null): string {
+  // `fileName` comes from inside the encrypted payload, so it is controlled by
+  // whoever produced the file — never trust it as a path.
+  const outPath = opts.output ?? (fileName ? sanitizeOutputName(fileName) : `${opts.input}.dec`);
+  assertWritable(outPath, opts.force);
+  fs.writeFileSync(outPath, fileData);
+  return `${outPath} (${formatBytes(fileData.length)})`;
+}
+
+/**
+ * Write the decrypted text payload: to `--output` when given, otherwise staged
+ * for stdout so it is printed after Ink releases the terminal.
+ */
+function writeTextPayload(opts: DecryptOptions, content: string): string {
+  const size = formatBytes(Buffer.byteLength(content, "utf-8"));
+
+  if (!opts.output) {
+    (globalThis as Record<string, unknown>).__zefer_stdout_content = content;
+    return `stdout (${size})`;
+  }
+
+  assertWritable(opts.output, opts.force);
+  fs.writeFileSync(opts.output, content, "utf-8");
+  return `${opts.output} (${size})`;
+}
+
+/** Persist a decrypted payload and return the status line text. */
+function writePayload(opts: DecryptOptions, header: ZeferHeader, payload: ZeferPayload): string {
+  if (header.mode === "file" && payload.fileData) {
+    return writeFilePayload(opts, payload.fileData, payload.meta.fileName);
+  }
+  if (header.mode === "text" && payload.content !== null) {
+    return writeTextPayload(opts, payload.content);
+  }
+  return "";
+}
+
 // ─── File header preview (shown before decryption) ───
 
-function FileInfo({ input }: { input: string }) {
+function FileInfo({ input }: Readonly<{ input: string }>) {
   if (input === "-") return null;
 
   let rawBytes: Buffer;
@@ -76,14 +151,13 @@ function FileInfo({ input }: { input: string }) {
   );
 }
 
-export function DecryptApp(opts: DecryptOptions) {
+export function DecryptApp(opts: Readonly<DecryptOptions>) {
   const { exit } = useApp();
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outputInfo, setOutputInfo] = useState<string>("");
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [question, setQuestion] = useState<string | null>(null);
 
   useEffect(() => {
     const startTime = Date.now();
@@ -94,27 +168,11 @@ export function DecryptApp(opts: DecryptOptions) {
         const tracker = createDecryptTracker(setProgress);
         tracker.reading();
 
-        let rawBytes: Buffer;
-        let fileContent: string;
-        let inputLabel: string;
-
-        if (opts.input === "-") {
-          const chunks: Buffer[] = [];
-          for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-          rawBytes = Buffer.concat(chunks);
-          fileContent = rawBytes.toString("utf-8");
-          inputLabel = `stdin (${formatBytes(rawBytes.length)})`;
-        } else {
-          rawBytes = fs.readFileSync(opts.input);
-          fileContent = rawBytes.toString("utf-8");
-          inputLabel = `${path.basename(opts.input)} (${formatBytes(rawBytes.length)})`;
-        }
-
+        const rawBytes = await readInput(opts.input);
+        const fileContent = rawBytes.toString("utf-8");
         tracker.readingDone();
 
-        // Quick parse to check for secret question (before full decrypt)
-        const parsed = parseFile(fileContent, rawBytes);
-        if (!parsed) {
+        if (!parseFile(fileContent, rawBytes)) {
           throw new Error("Invalid or unrecognized .zefer file format");
         }
 
@@ -134,51 +192,12 @@ export function DecryptApp(opts: DecryptOptions) {
         });
 
         if (!result.ok) {
-          const messages: Record<string, string> = {
-            wrong_passphrase: "Wrong passphrase",
-            expired: "This file has expired",
-            wrong_answer: "Wrong secret question answer",
-            max_attempts: "Maximum decryption attempts exceeded",
-            ip_blocked: "Your IP address is not in the allowlist",
-            needs_answer: `Secret question required: ${parsed.header.mode}`,
-            invalid_format: "Invalid file format",
-          };
-          throw new Error(messages[result.error] ?? result.error);
+          throw new Error(DECODE_ERRORS[result.error]);
         }
-
-        const { payload, header } = result;
-        const meta = payload.meta;
 
         setStage("writing");
         tracker.writing();
-
-        if (header.mode === "file" && payload.fileData) {
-          // File mode: write to output path
-          const outPath =
-            opts.output ??
-            (meta.fileName ? path.join(process.cwd(), meta.fileName) : `${opts.input}.dec`);
-
-          if (fs.existsSync(outPath) && !opts.force) {
-            throw new Error(`Output file "${outPath}" already exists. Use --force to overwrite.`);
-          }
-
-          fs.writeFileSync(outPath, payload.fileData);
-          setOutputInfo(`${outPath} (${formatBytes(payload.fileData.length)})`);
-        } else if (header.mode === "text" && payload.content !== null) {
-          // Text mode
-          if (opts.output) {
-            if (fs.existsSync(opts.output) && !opts.force) {
-              throw new Error(`Output file "${opts.output}" already exists. Use --force to overwrite.`);
-            }
-            fs.writeFileSync(opts.output, payload.content, "utf-8");
-            setOutputInfo(`${opts.output} (${formatBytes(Buffer.byteLength(payload.content, "utf-8"))})`);
-          } else {
-            // Print to stdout (after Ink exits)
-            setOutputInfo(`stdout (${formatBytes(Buffer.byteLength(payload.content, "utf-8"))})`);
-            // Store content to write after exit
-            (globalThis as Record<string, unknown>).__zefer_stdout_content = payload.content;
-          }
-        }
+        setOutputInfo(writePayload(opts, result.header, result.payload));
 
         tracker.done();
         setElapsedMs(Date.now() - startTime);
@@ -195,8 +214,7 @@ export function DecryptApp(opts: DecryptOptions) {
     run();
   }, []);
 
-  const isDone = stage === "done";
-  const isError = stage === "error";
+  const elapsedSuffix = elapsedMs > 0 ? ` in ${elapsedMs}ms` : "";
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -209,9 +227,9 @@ export function DecryptApp(opts: DecryptOptions) {
 
       <StatusLine
         progress={progress}
-        done={isDone}
+        done={stage === "done"}
         error={error}
-        doneMessage={`${outputInfo}${elapsedMs > 0 ? ` in ${elapsedMs}ms` : ""}`}
+        doneMessage={`${outputInfo}${elapsedSuffix}`}
       />
     </Box>
   );

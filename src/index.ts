@@ -14,16 +14,14 @@
 import { Command } from "commander";
 import { render } from "ink";
 import React from "react";
-import * as path from "path";
-import * as fs from "fs";
 
 import { EncryptApp, type EncryptOptions } from "./commands/encrypt.js";
 import { DecryptApp, type DecryptOptions } from "./commands/decrypt.js";
 import { KeygenApp, type KeygenOptions } from "./commands/keygen.js";
 import { AnalyzeApp } from "./commands/analyze.js";
 import { InfoApp } from "./commands/info.js";
-import { promptPassword, promptText, promptConfirm } from "./utils/prompt.js";
-import { createRequire } from "module";
+import { promptPassword } from "./utils/prompt.js";
+import { createRequire } from "node:module";
 import type { CompressionMethod } from "./lib/compression.js";
 import { MODES, type KeygenMode } from "./lib/passwords.js";
 
@@ -102,13 +100,13 @@ program
   .option(
     "--ttl <minutes>",
     "Expiration in minutes (0 = never, default: 0)",
-    (v) => parseInt(v, 10),
+    (v) => Number.parseInt(v, 10),
     0
   )
   .option(
     "-i, --iterations <n>",
     "PBKDF2 iterations (0 = auto-benchmark, default: 0)",
-    (v) => parseInt(v, 10),
+    (v) => Number.parseInt(v, 10),
     0
   )
   .option(
@@ -116,7 +114,7 @@ program
     "Compression: none|gzip|deflate|deflate-raw (default: none)",
     "none"
   )
-  .option("--max-attempts <n>", "Max decryption attempts (0 = unlimited)", (v) => parseInt(v, 10), 0)
+  .option("--max-attempts <n>", "Max decryption attempts (0 = unlimited)", (v) => Number.parseInt(v, 10), 0)
   .option("--allowed-ips <ips>", "Comma-separated IP allowlist")
   .option("--dual-key", "Enable dual-key mode (requires --second)", false)
   .option("--verbose", "Show operation details", false)
@@ -252,13 +250,13 @@ program
     "Mode: unicode|secure|alpha|hex|base58|pin|uuid (default: secure)",
     "secure"
   )
-  .option("-l, --length <n>", "Key length in characters, 1-2048 (default: 64)", (v) => parseInt(v, 10), 64)
-  .option("-n, --count <n>", "Number of keys to generate, 1-50 (default: 1)", (v) => parseInt(v, 10), 1)
+  .option("-l, --length <n>", "Key length in characters, 1-2048 (default: 64)", (v) => Number.parseInt(v, 10), 64)
+  .option("-n, --count <n>", "Number of keys to generate, 1-50 (default: 1)", (v) => Number.parseInt(v, 10), 1)
   .option("--exclude-ambiguous", "Exclude ambiguous characters (0 O 1 l I)", false)
   .option("--exclude <chars>", "Exclude specific characters from the alphabet")
   .option("--require-all", "Guarantee lower/upper/digit/symbol when the alphabet has them", false)
   .option("--no-repeats", "Never emit the same character twice in a row")
-  .option("--group <n>", "Insert a dash every N characters (cosmetic)", (v) => parseInt(v, 10), 0)
+  .option("--group <n>", "Insert a dash every N characters (cosmetic)", (v) => Number.parseInt(v, 10), 0)
   .option("--sort", "Sort keys from strongest to weakest score", false)
   .option("--quiet", "Print raw keys only (pipe-friendly, no analysis)", false)
   .action((options) => {
@@ -290,8 +288,8 @@ program
   .command("analyze")
   .description("Full security report for a password (entropy, attack scenarios, compliance)")
   .argument("[password]", "Password to analyze (prompted securely if omitted)")
-  .action(async (password: string | undefined) => {
-    let value = password ?? "";
+  .action(async (password = "") => {
+    let value = password;
     if (!value) {
       value = await promptPassword("Password to analyze: ");
       if (!value) {
@@ -343,7 +341,9 @@ Auto-detection: launching the binary with no arguments and piped stdin
 
 // ─── Parse ───
 
-program.parseAsync(process.argv).catch((err) => {
+try {
+  await program.parseAsync(process.argv);
+} catch (err) {
   console.error("Fatal:", err instanceof Error ? err.message : err);
   process.exit(1);
-});
+}

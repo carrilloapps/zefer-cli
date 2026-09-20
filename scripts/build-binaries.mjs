@@ -20,10 +20,10 @@
  *   checksums.txt
  */
 
-import { execSync } from "child_process";
-import { mkdirSync, createReadStream, writeFileSync, existsSync, statSync } from "fs";
-import { createHash } from "crypto";
-import { join } from "path";
+import { execSync } from "node:child_process";
+import { mkdirSync, createReadStream, writeFileSync, existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { join } from "node:path";
 
 const ENTRY   = "dist/index.mjs";
 const OUT_DIR = "binaries";
@@ -89,8 +89,13 @@ try {
 
 mkdirSync(OUT_DIR, { recursive: true });
 
-const label = targetArg ? `[${targetArg}]` : buildCurrent ? "[current]" : "[all platforms]";
-console.log(`  Building zefer-cli binaries ${label}\n`);
+function buildLabel() {
+  if (targetArg) return `[${targetArg}]`;
+  if (buildCurrent) return "[current]";
+  return "[all platforms]";
+}
+
+console.log(`  Building zefer-cli binaries ${buildLabel()}\n`);
 
 // ─── Build ───
 

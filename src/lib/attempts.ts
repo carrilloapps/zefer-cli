@@ -5,9 +5,9 @@
  * Keys are a hash prefix of the encrypted content, same as the web app.
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
 const ATTEMPTS_DIR = path.join(os.homedir(), ".zefer");
 const ATTEMPTS_FILE = path.join(ATTEMPTS_DIR, "attempts.json");

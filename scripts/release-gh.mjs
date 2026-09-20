@@ -17,16 +17,42 @@
  *   - .github/workflows/binaries.yml → standalone binaries for all platforms
  */
 
-import { execSync } from "child_process";
-import { readFileSync } from "fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
+
+/**
+ * Resolve an executable to an absolute path up front, so the child process is
+ * never started by an implicit PATH lookup. Returns `null` when not found.
+ */
+function resolveExecutable(name) {
+  const extensions =
+    process.platform === "win32"
+      ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")
+      : [""];
+
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of extensions) {
+      const candidate = join(dir, name + ext);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
 
 const pkg     = JSON.parse(readFileSync("package.json", "utf-8"));
 const version = pkg.version;
 const tag     = `v${version}`;
 
 // Verify git tag exists
+const git = resolveExecutable("git");
+if (!git) {
+  console.error(`\n  ✗ git not found in PATH\n`);
+  process.exit(1);
+}
 try {
-  execSync(`git rev-parse ${tag}`, { stdio: "pipe" });
+  execFileSync(git, ["rev-parse", tag], { stdio: "pipe" });
 } catch {
   console.error(`\n  ✗ Git tag ${tag} not found.`);
   console.error(`    Run "npm run release:patch|minor|major" first to bump version and create the tag.\n`);
@@ -34,9 +60,8 @@ try {
 }
 
 // Verify gh CLI is available
-try {
-  execSync("gh --version", { stdio: "pipe" });
-} catch {
+const gh = resolveExecutable("gh");
+if (!gh) {
   console.error(`\n  ✗ gh (GitHub CLI) not found — install from https://cli.github.com\n`);
   process.exit(1);
 }
@@ -44,8 +69,9 @@ try {
 console.log(`\n  Creating GitHub release ${tag}...`);
 
 try {
-  const out = execSync(
-    `gh release create ${tag} --generate-notes --title "${tag}"`,
+  const out = execFileSync(
+    gh,
+    ["release", "create", tag, "--generate-notes", "--title", tag],
     { encoding: "utf-8", stdio: "pipe" }
   );
   console.log(`\n  ✓ Release created: ${out.trim()}`);

@@ -7,8 +7,8 @@
 
 import React, { useEffect, useState } from "react";
 import { Box, Text, useApp } from "ink";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { encodeZefer } from "../lib/zefer.js";
 import { benchmarkDevice } from "../lib/crypto.js";
 import { createEncryptTracker, type ProgressState } from "../lib/progress.js";
@@ -46,7 +46,56 @@ type Stage =
   | "done"
   | "error";
 
-export function EncryptApp(opts: EncryptOptions) {
+/** Everything `encodeZefer` needs about the input, plus a label for the UI. */
+interface EncryptSource {
+  content?: string;
+  fileData?: Buffer;
+  fileName: string | null;
+  fileType?: string;
+  label: string;
+}
+
+/** Resolve the input — inline text, stdin, or a file on disk. */
+async function readSource(opts: EncryptOptions): Promise<EncryptSource> {
+  if (opts.textContent !== undefined) {
+    const content = opts.textContent;
+    const size = formatBytes(Buffer.byteLength(content, "utf-8"));
+    return { content, fileName: null, label: `text (${size})` };
+  }
+
+  if (opts.input === "-") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+    const fileData = Buffer.concat(chunks);
+    return { fileData, fileName: null, label: `stdin (${formatBytes(fileData.length)})` };
+  }
+
+  const stat = fs.statSync(opts.input);
+  const fileData = fs.readFileSync(opts.input);
+  const fileName = path.basename(opts.input);
+  const ext = path.extname(opts.input).slice(1).toLowerCase();
+  return {
+    fileData,
+    fileName,
+    fileType: ext ? `application/${ext}` : "application/octet-stream",
+    label: `${fileName} (${formatBytes(stat.size)})`,
+  };
+}
+
+/**
+ * Pick a PBKDF2 iteration count. A caller-supplied value always wins; otherwise
+ * benchmark the device and target roughly one second of derivation.
+ */
+async function resolveIterations(requested: number | undefined): Promise<number> {
+  if (requested && requested > 0) return requested;
+
+  const msFor100k = await benchmarkDevice();
+  if (msFor100k < 200) return 1_000_000;
+  if (msFor100k < 400) return 600_000;
+  return 300_000;
+}
+
+export function EncryptApp(opts: Readonly<EncryptOptions>) {
   const { exit } = useApp();
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState<ProgressState | null>(null);
@@ -64,58 +113,25 @@ export function EncryptApp(opts: EncryptOptions) {
         const tracker = createEncryptTracker(setProgress);
         tracker.reading();
 
-        let fileData: Buffer | undefined;
-        let fileName: string | null = null;
-        let fileType: string | undefined;
-        let content: string | undefined;
-
-        if (opts.textContent !== undefined) {
-          // Text mode
-          content = opts.textContent;
-          fileName = null;
-          setInputInfo(`text (${formatBytes(Buffer.byteLength(content, "utf-8"))})`);
-        } else if (opts.input === "-") {
-          // Read from stdin
-          const chunks: Buffer[] = [];
-          for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-          const buf = Buffer.concat(chunks);
-          fileData = buf;
-          fileName = null;
-          setInputInfo(`stdin (${formatBytes(buf.length)})`);
-        } else {
-          const stat = fs.statSync(opts.input);
-          fileData = fs.readFileSync(opts.input);
-          fileName = path.basename(opts.input);
-          const ext = path.extname(opts.input).slice(1).toLowerCase();
-          fileType = ext ? `application/${ext}` : "application/octet-stream";
-          setInputInfo(`${fileName} (${formatBytes(stat.size)})`);
-        }
-
+        const source = await readSource(opts);
+        setInputInfo(source.label);
         tracker.readingDone();
 
-        // Auto-benchmark if iterations not specified
-        let iterations = opts.iterations;
-        if (!iterations || iterations === 0) {
-          setStage("benchmarking");
-          const msFor100k = await benchmarkDevice();
-          // Target ~1 second of derivation
-          if (msFor100k < 200) iterations = 1_000_000;
-          else if (msFor100k < 400) iterations = 600_000;
-          else iterations = 300_000;
-        }
+        if (!opts.iterations) setStage("benchmarking");
+        const iterations = await resolveIterations(opts.iterations);
 
         const expiresAt =
           opts.ttl > 0 ? Date.now() + opts.ttl * 60 * 1000 : 0;
 
         setStage("encrypting");
         const result = await encodeZefer({
-          content,
-          fileData,
+          content: source.content,
+          fileData: source.fileData,
           passphrase: opts.passphrase,
           secondPassphrase: opts.secondPassphrase,
           revealKey: opts.revealKey,
-          fileName,
-          fileType,
+          fileName: source.fileName,
+          fileType: source.fileType,
           expiresAt,
           hint: opts.hint,
           note: opts.note,
@@ -158,6 +174,7 @@ export function EncryptApp(opts: EncryptOptions) {
 
   const isDone = stage === "done";
   const isError = stage === "error";
+  const elapsedSuffix = elapsedMs > 0 ? ` in ${elapsedMs}ms` : "";
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -202,7 +219,7 @@ export function EncryptApp(opts: EncryptOptions) {
         progress={progress}
         done={isDone}
         error={error}
-        doneMessage={`${outputInfo}${elapsedMs > 0 ? ` in ${elapsedMs}ms` : ""}`}
+        doneMessage={`${outputInfo}${elapsedSuffix}`}
       />
     </Box>
   );

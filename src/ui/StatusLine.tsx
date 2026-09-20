@@ -25,7 +25,7 @@ const STAGE_COLORS: Partial<Record<CryptoStage, string>> = {
   done: "green",
 };
 
-export function StatusLine({ progress, done, error, doneMessage }: StatusLineProps) {
+export function StatusLine({ progress, done, error, doneMessage }: Readonly<StatusLineProps>) {
   if (error) {
     return (
       <Box flexDirection="column">

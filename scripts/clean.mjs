@@ -5,7 +5,7 @@
  * Cross-platform (works on Windows without needing rimraf).
  */
 
-import { rmSync, existsSync } from "fs";
+import { rmSync, existsSync } from "node:fs";
 
 const DIRS = ["dist", "binaries"];
 

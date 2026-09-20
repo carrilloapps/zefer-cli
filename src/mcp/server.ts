@@ -12,11 +12,12 @@
  *        zefer_analyze_password, zefer_inspect
  */
 
-import * as readline from "readline";
-import * as fs from "fs";
-import * as path from "path";
-import * as nodeCrypto from "crypto";
+import * as readline from "node:readline";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as nodeCrypto from "node:crypto";
 import { encodeZefer, decodeZefer, parseFile } from "../lib/zefer.js";
+import { sanitizeExplicitPath, sanitizeOutputName } from "../utils/paths.js";
 import type { CompressionMethod } from "../lib/compression.js";
 import {
   MODES,
@@ -32,6 +33,16 @@ import {
 } from "../lib/passwords.js";
 
 // ─── JSON-RPC plumbing ───
+
+/**
+ * Tool arguments arrive untyped over JSON-RPC. Coerce primitives, and drop
+ * objects and arrays instead of letting them stringify to "[object Object]".
+ */
+function asString(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
 
 interface RpcRequest {
   jsonrpc: "2.0";
@@ -77,10 +88,11 @@ function walkChunks(data: Buffer): { ok: boolean; chunks: number; ciphertext: nu
   return { ok: off === data.length && chunks > 0, chunks, ciphertext };
 }
 
+/** Shannon entropy in bits/byte. Callers only pass samples of at least 1 KB,
+ *  so an empty buffer never reaches here. */
 function shannonEntropy(bytes: Buffer): number {
-  if (bytes.length === 0) return 0;
   const freq = new Array<number>(256).fill(0);
-  for (let i = 0; i < bytes.length; i++) freq[bytes[i]]++;
+  for (const byte of bytes) freq[byte]++;
   let h = 0;
   for (const f of freq) {
     if (f > 0) {
@@ -224,12 +236,13 @@ const TOOLS = [
 // ─── Tool handlers ───
 
 async function handleEncrypt(args: Record<string, unknown>) {
-  const passphrase = String(args.passphrase ?? "");
+  const passphrase = asString(args.passphrase);
   if (passphrase.length < 6) return toolText("Error: passphrase must be at least 6 characters", true);
 
   const text = args.text as string | undefined;
-  const inputPath = args.inputPath as string | undefined;
-  if (!text && !inputPath) return toolText("Error: provide `text` or `inputPath`", true);
+  const rawInputPath = args.inputPath as string | undefined;
+  if (!text && !rawInputPath) return toolText("Error: provide `text` or `inputPath`", true);
+  const inputPath = rawInputPath ? sanitizeExplicitPath(rawInputPath) : undefined;
   if (args.question && !args.questionAnswer) return toolText("Error: `questionAnswer` is required with `question`", true);
 
   let fileData: Buffer | undefined;
@@ -243,7 +256,9 @@ async function handleEncrypt(args: Record<string, unknown>) {
   }
 
   const ttl = Number(args.ttlMinutes ?? 0);
-  const out = (args.outputPath as string | undefined) ?? (inputPath ? `${inputPath}.zefer` : "encrypted.zefer");
+  const out = sanitizeExplicitPath(
+    (args.outputPath as string | undefined) ?? (inputPath ? `${inputPath}.zefer` : "encrypted.zefer")
+  );
 
   const buf = await encodeZefer({
     content: text,
@@ -267,7 +282,7 @@ async function handleEncrypt(args: Record<string, unknown>) {
 
   fs.writeFileSync(out, buf);
   return toolText({
-    outputPath: path.resolve(out),
+    outputPath: out,
     sizeBytes: buf.length,
     format: args.revealKey ? "ZEFR3" : "ZEFB3",
     expiresAt: ttl > 0 ? new Date(Date.now() + ttl * 60_000).toISOString() : "never",
@@ -275,12 +290,12 @@ async function handleEncrypt(args: Record<string, unknown>) {
 }
 
 async function handleDecrypt(args: Record<string, unknown>) {
-  const inputPath = String(args.inputPath ?? "");
+  const inputPath = sanitizeExplicitPath(asString(args.inputPath));
   if (!fs.existsSync(inputPath)) return toolText(`Error: file not found: ${inputPath}`, true);
 
   const rawBytes = fs.readFileSync(inputPath);
   const fileContent = rawBytes.toString("utf-8");
-  const result = await decodeZefer(fileContent, String(args.passphrase ?? ""), {
+  const result = await decodeZefer(fileContent, asString(args.passphrase), {
     secondPassphrase: args.secondPassphrase as string | undefined,
     questionAnswer: args.questionAnswer as string | undefined,
     rawBytes,
@@ -291,19 +306,26 @@ async function handleDecrypt(args: Record<string, unknown>) {
 
   const { payload } = result;
   if (payload.fileData) {
-    const out = (args.outputPath as string | undefined) ?? payload.meta.fileName ?? "decrypted.bin";
+    // `payload.meta.fileName` lives inside the encrypted blob and is chosen by
+    // whoever built the file: confine it to the working directory. An explicit
+    // `outputPath` is the caller's own instruction, so it may point anywhere.
+    const outputPath = args.outputPath as string | undefined;
+    const out = outputPath
+      ? sanitizeExplicitPath(outputPath)
+      : sanitizeOutputName(payload.meta.fileName ?? "decrypted.bin");
     if (fs.existsSync(out) && !args.overwrite) {
       return toolText(`Error: ${out} exists — pass overwrite: true to replace it`, true);
     }
     fs.writeFileSync(out, payload.fileData);
     return toolText({
-      writtenTo: path.resolve(out),
+      writtenTo: out,
       fileName: payload.meta.fileName,
       sizeBytes: payload.fileData.length,
     });
   }
 
-  return toolText({ content: payload.content ?? "" });
+  // Not a file payload, so `decodeZefer` filled `content` with the plaintext.
+  return toolText({ content: payload.content });
 }
 
 function handleKeygen(args: Record<string, unknown>) {
@@ -334,8 +356,60 @@ function handleKeygen(args: Record<string, unknown>) {
   return toolText({ mode, length: mode === "uuid" ? "uuid-v7" : length, count, keys });
 }
 
+type InspectedFile = NonNullable<ReturnType<typeof parseFile>>;
+type ChunkWalk = ReturnType<typeof walkChunks>;
+
+/** Human name for the container, as `zefer info` prints it. */
+function formatLabel(parsed: InspectedFile): string {
+  if (parsed.revealBinaryData) return "ZEFR3 (binary, with reveal key)";
+  if (parsed.binary) return "ZEFB3 (binary, single key)";
+  return "legacy text";
+}
+
+/** The three KDF tiers the web app offers: 1M / 600k / everything below. */
+function kdfLevel(iterations: number): string {
+  if (iterations >= 1_000_000) return "maximum";
+  if (iterations >= 600_000) return "high";
+  return "standard";
+}
+
+/** Severity-tagged findings, mirroring the web `/analyzer` report. */
+function inspectObservations(
+  parsed: InspectedFile,
+  main: ChunkWalk | null,
+  reveal: ChunkWalk | null,
+  entropy: number | null
+): { severity: string; text: string }[] {
+  const { header } = parsed;
+  const candidates: [boolean, { severity: string; text: string }][] = [
+    [
+      !!main && !(main.ok && (reveal === null || reveal.ok)),
+      { severity: "danger", text: "Internal structure does not match the declared format (corrupted or truncated)" },
+    ],
+    [
+      entropy !== null && entropy < 7.5,
+      { severity: "danger", text: "Ciphertext randomness unusually low — corrupted or not real ciphertext" },
+    ],
+    [
+      header.iterations < 600_000,
+      { severity: "warning", text: "KDF at standard level — consider 600k or 1M iterations for sensitive data" },
+    ],
+    [!!header.hint, { severity: "warning", text: "Public hint visible without the passphrase" }],
+    [!!header.note, { severity: "info", text: "Public note visible to anyone holding the file" }],
+    [
+      !!parsed.revealBinaryData,
+      { severity: "info", text: "Reveal key included: two valid passphrases can decrypt" },
+    ],
+    [
+      !!header.compression && header.compression !== "none",
+      { severity: "info", text: "Compression enabled: ciphertext size may hint at content compressibility" },
+    ],
+  ];
+  return candidates.filter(([applies]) => applies).map(([, observation]) => observation);
+}
+
 function handleInspect(args: Record<string, unknown>) {
-  const inputPath = String(args.inputPath ?? "");
+  const inputPath = sanitizeExplicitPath(asString(args.inputPath));
   if (!fs.existsSync(inputPath)) return toolText(`Error: file not found: ${inputPath}`, true);
 
   const rawBytes = fs.readFileSync(inputPath);
@@ -348,28 +422,16 @@ function handleInspect(args: Record<string, unknown>) {
   const sample = parsed.binaryData?.subarray(44, Math.min(parsed.binaryData.length, 44 + 64 * 1024));
   const entropy = sample && sample.length >= 1024 ? shannonEntropy(sample) : null;
   const guessesPerGpu = Math.max(1, Math.round(1e10 / (2 * header.iterations)));
-
-  const observations: { severity: string; text: string }[] = [];
-  if (main && !(main.ok && (reveal === null || reveal.ok)))
-    observations.push({ severity: "danger", text: "Internal structure does not match the declared format (corrupted or truncated)" });
-  if (entropy !== null && entropy < 7.5)
-    observations.push({ severity: "danger", text: "Ciphertext randomness unusually low — corrupted or not real ciphertext" });
-  if (header.iterations < 600_000)
-    observations.push({ severity: "warning", text: "KDF at standard level — consider 600k or 1M iterations for sensitive data" });
-  if (header.hint) observations.push({ severity: "warning", text: "Public hint visible without the passphrase" });
-  if (header.note) observations.push({ severity: "info", text: "Public note visible to anyone holding the file" });
-  if (parsed.revealBinaryData) observations.push({ severity: "info", text: "Reveal key included: two valid passphrases can decrypt" });
-  if (header.compression && header.compression !== "none")
-    observations.push({ severity: "info", text: "Compression enabled: ciphertext size may hint at content compressibility" });
+  const observations = inspectObservations(parsed, main, reveal, entropy);
 
   return toolText({
     file: path.basename(inputPath),
     sizeBytes: rawBytes.length,
-    format: parsed.revealBinaryData ? "ZEFR3 (binary, with reveal key)" : parsed.binary ? "ZEFB3 (binary, single key)" : "legacy text",
+    format: formatLabel(parsed),
     header: {
       mode: header.mode,
       iterations: header.iterations,
-      kdfLevel: header.iterations >= 1_000_000 ? "maximum" : header.iterations >= 600_000 ? "high" : "standard",
+      kdfLevel: kdfLevel(header.iterations),
       compression: header.compression,
       hint: header.hint,
       note: header.note,
@@ -452,7 +514,7 @@ export async function startMcpServer(version: string): Promise<void> {
             case "zefer_encrypt": result = await handleEncrypt(args); break;
             case "zefer_decrypt": result = await handleDecrypt(args); break;
             case "zefer_keygen": result = handleKeygen(args); break;
-            case "zefer_analyze_password": result = toolText(fullPasswordReport(String(args.password ?? ""))); break;
+            case "zefer_analyze_password": result = toolText(fullPasswordReport(asString(args.password))); break;
             case "zefer_inspect": result = handleInspect(args); break;
             default:
               replyError(req.id, -32602, `Unknown tool: ${name}`);

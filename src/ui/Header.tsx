@@ -7,7 +7,7 @@ interface HeaderProps {
   subtitle?: string;
 }
 
-export function Header({ title, subtitle }: HeaderProps) {
+export function Header({ title, subtitle }: Readonly<HeaderProps>) {
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text bold color="cyan">

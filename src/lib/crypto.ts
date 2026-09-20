@@ -8,12 +8,13 @@
  * This matches the Web Crypto API output exactly.
  */
 
-import * as nodeCrypto from "crypto";
-import { promisify } from "util";
+import * as nodeCrypto from "node:crypto";
+import { promisify } from "node:util";
 
 const SALT_LENGTH = 32;
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32; // 256 bits
+const AUTH_TAG_LENGTH = 16; // GCM tag — appended to the ciphertext (Web Crypto layout)
 
 const pbkdf2Async = promisify(nodeCrypto.pbkdf2);
 
@@ -83,7 +84,7 @@ export async function encryptRaw(
   const iv = nodeCrypto.randomBytes(IV_LENGTH);
   const key = await deriveKey(passphrase, salt, iterations);
 
-  const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv);
+  const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH });
   const encrypted = Buffer.concat([cipher.update(Buffer.from(data)), cipher.final()]);
   const authTag = cipher.getAuthTag(); // always 16 bytes
 
@@ -111,10 +112,10 @@ export async function decryptFromBase64(
   const ciphertextWithTag = fromBase64(ciphertextB64);
   const key = await deriveKey(passphrase, salt, iterations);
 
-  const authTag = ciphertextWithTag.subarray(-16);
-  const ciphertext = ciphertextWithTag.subarray(0, -16);
+  const authTag = ciphertextWithTag.subarray(-AUTH_TAG_LENGTH);
+  const ciphertext = ciphertextWithTag.subarray(0, -AUTH_TAG_LENGTH);
 
-  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv);
+  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
@@ -130,10 +131,10 @@ export async function decryptFromBinary(
   const ciphertextWithTag = buf.subarray(SALT_LENGTH + IV_LENGTH);
   const key = await deriveKey(passphrase, salt, iterations);
 
-  const authTag = ciphertextWithTag.subarray(-16);
-  const ciphertext = ciphertextWithTag.subarray(0, -16);
+  const authTag = ciphertextWithTag.subarray(-AUTH_TAG_LENGTH);
+  const ciphertext = ciphertextWithTag.subarray(0, -AUTH_TAG_LENGTH);
 
-  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv);
+  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }

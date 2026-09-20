@@ -5,6 +5,130 @@ All notable changes to zefer-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-20
+
+A security and quality release. The major bump is driven by a single breaking
+change to an exported type (see below); everything else is additive, a fix, or
+tooling. The `.zefer` binary format, the cryptographic parameters and
+cross-compatibility with the web app are **unchanged** — files written by any
+earlier version still decrypt here, and files written here still decrypt in the
+browser and in previous releases.
+
+### Changed
+
+- **BREAKING — `ParsedFile.encryptedLines` is now required.** It changed from
+  `encryptedLines?: string[]` to `encryptedLines: string[]`, and is always
+  present: the legacy text containers (ZEFER3, ZEFER2) fill it with their base64
+  lines, and the binary containers (ZEFB3, ZEFR3) fill it with `[]`.
+
+  `ParsedFile` is exported from the published library, so this is a compile-time
+  break in two directions. Code that **constructs** a `ParsedFile` literal no
+  longer compiles without the field, and code that **reads** it now receives `[]`
+  where it previously received `undefined` — an `if (!parsed.encryptedLines)`
+  guard silently stops matching, and `parsed.encryptedLines?.length` becomes `0`
+  instead of `undefined`. Migration is mechanical: add `encryptedLines: []` to
+  literals, and replace existence checks with `parsed.encryptedLines.length === 0`
+  or with the explicit `parsed.binary` flag, which is the honest discriminator
+  between the two container families.
+
+  Runtime behaviour of `encodeZefer` / `decodeZefer` is identical.
+
+### Security
+
+- **Path traversal (zip-slip) when writing decrypted output.** `ZeferMeta.fileName`
+  lives *inside* the encrypted payload, so it is controlled by whoever produced
+  the `.zefer` file — not by the person decrypting it. A hostile file could claim
+  a name like `../../../.ssh/authorized_keys` and steer the write outside the
+  working directory. This affected both the **CLI** (`zefer decrypt` without
+  `-o`) and the **MCP server** (`zefer_decrypt`), where the same name also
+  reached the output path.
+
+  A new module, `src/utils/paths.ts`, separates the two kinds of path that reach
+  a write site. A destination the caller chose explicitly (`-o`, the MCP
+  `outputPath`) is a legitimate instruction and is only normalized and checked
+  for NUL bytes and emptiness (`sanitizeExplicitPath`). A payload-supplied name
+  is never treated as a path at all: it is flattened across both separator
+  styles, reduced to a bare file name, rejected if that name could still escape
+  (`.`, `..`, or a Windows drive prefix such as `C:`, which `path.resolve` reads
+  as drive-relative) and then resolved inside the current working directory
+  (`sanitizeOutputName`). Windows-style names are reduced on POSIX too, so a
+  hostile file behaves identically wherever it is decrypted.
+
+- **Explicit `authTagLength` on every AES-256-GCM cipher.** `createCipheriv` and
+  `createDecipheriv` in `src/lib/crypto.ts` and `src/lib/chunked-crypto.ts` now
+  pass `{ authTagLength: 16 }` instead of relying on the default. The value is
+  the same 16-byte tag the format has always used, so no output changes and no
+  compatibility is affected — but the length is now asserted at the call site
+  rather than inherited, which is what closes the door on a short-tag
+  authentication bypass if a default ever shifts.
+
+- **Type confusion in the MCP server.** MCP arguments arrive as untyped JSON-RPC
+  values. A non-string argument used to be coerced with template-literal
+  interpolation, so an object became the literal string `"[object Object]"` and
+  then continued on as a passphrase or as a file path — a silent wrong-value bug
+  instead of a clean error. Every tool argument now goes through `asString()`,
+  which validates the type and rejects anything else before it reaches the
+  crypto layer or the filesystem.
+
+### Added
+
+- **ESLint, from scratch.** The project had no linter at all. `eslint.config.mjs`
+  (flat config, `typescript-eslint`) and an `npm run lint` script now cover the
+  whole repository at **zero errors and zero warnings**, and lint is the first
+  gate in CI.
+- **A Vitest unit suite behind a 100% coverage gate.** `vitest.config.ts`
+  enforces **100% statements, branches, functions and lines** over all of
+  `src/**`. New scripts: `test` (single run), `test:watch`, `test:coverage` (the
+  gate) and `test:integration` (the existing `scripts/test.mjs` suite, now
+  reachable by name). `npm run verify` chains lint → typecheck → build →
+  coverage → integration, and `prepublishOnly` runs it before every publish.
+- **`.github/workflows/security.yml`** — a monthly sweep (plus manual dispatch)
+  running Semgrep, Trivy, Gitleaks and SonarQube. The first three upload SARIF,
+  so findings land in the repository's Security → Code scanning tab; SonarQube
+  is skipped cleanly when its secrets are not configured, instead of failing the
+  run.
+- **`.github/dependabot.yml`** — monthly npm and GitHub Actions updates. Minor
+  and patch updates are grouped into a single pull request; majors are isolated
+  in their own. There are deliberately **no `ignore:` rules**, because Dependabot
+  applies them to security updates as well — ignoring majors in bulk would
+  silence a CVE whose only patch ships in a major release.
+- **Community and agent documentation**: `AGENTS.md` (the three channels, code
+  rules, testing and CI, versioning), `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.github/FUNDING.yml`, `.github/ISSUE_TEMPLATE/config.yml` and
+  `.github/ISSUE_TEMPLATE/security_vulnerability.md`.
+
+### Fixed
+
+- **`zefer info` never actually detected ZEFER2 files.** The format branch was
+  written so that the ZEFER2 case could not be reached, leaving that legacy
+  container mislabelled. Detection now lives in a dedicated `detectFormat()` and
+  reports ZEFB3, ZEFR3, ZEFER3 and ZEFER2 correctly.
+- **`binaries.yml`: shell injection through `${{ github.ref_name }}`.** The
+  release tag was interpolated straight into a `run:` block, where the value is
+  substituted before the shell parses the script. It is now passed through
+  `env:` and read as `"$RELEASE_TAG"`, so its contents can never be parsed as
+  shell.
+- **Every GitHub Action pinned to a full commit SHA**, with the tag kept in a
+  trailing comment. A mutable tag (`@v4`) can be re-pointed at any time by
+  whoever controls the action repository, which makes it an unreviewed
+  code-execution channel inside the workflow.
+- `overrides.esbuild` added, pulling the transitive `esbuild` (via tsup and tsx)
+  onto a patched version.
+- `scripts/build-binaries.mjs`, `scripts/clean.mjs`, `scripts/release-gh.mjs`
+  and `scripts/test.mjs` cleaned up under the new lint rules.
+
+### Tests
+
+- **498 unit tests across 23 files**, at 100% coverage on all four metrics.
+  Tests live in `__tests__` directories next to the code they cover: Ink
+  components are rendered with `ink-testing-library`, and the MCP server is
+  driven through its real stdio JSON-RPC loop over a fake stdin/stdout pair.
+- The **96 integration checks** in `scripts/test.mjs` are unchanged and remain
+  deliberately separate: they build the package and exercise the shipped binary,
+  the MCP server and the published library, including the cross-channel matrix.
+
+[2.0.0]: https://github.com/carrilloapps/zefer-cli/compare/v1.4.0...v2.0.0
+
 ## [1.4.0] - 2026-06-15
 
 ### Changed

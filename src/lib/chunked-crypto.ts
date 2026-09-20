@@ -10,12 +10,13 @@
  * Binary layout is identical to the browser version — cross-platform compatible.
  */
 
-import * as nodeCrypto from "crypto";
+import * as nodeCrypto from "node:crypto";
 import { deriveKey } from "./crypto.js";
 
 const SALT_LENGTH = 32;
 const IV_LENGTH = 12;
 export const CHUNK_SIZE = 16 * 1024 * 1024; // 16 MB
+const AUTH_TAG_LENGTH = 16; // GCM tag — appended to each chunk ciphertext (Web Crypto layout)
 
 export interface ChunkedEncryptResult {
   salt: Buffer;
@@ -59,7 +60,7 @@ export async function chunkedEncrypt(
     const chunkData = buf.subarray(start, start + CHUNK_SIZE);
     const iv = chunkIv(baseIv, i);
 
-    const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv);
+    const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH });
     const encrypted = Buffer.concat([cipher.update(chunkData), cipher.final()]);
     const authTag = cipher.getAuthTag(); // 16 bytes
 
@@ -118,10 +119,10 @@ export async function chunkedDecryptToBuffer(
     offset += chunkLen;
 
     const iv = chunkIv(baseIvBuf, chunkIndex);
-    const authTag = ciphertextWithTag.subarray(-16);
-    const ciphertext = ciphertextWithTag.subarray(0, -16);
+    const authTag = ciphertextWithTag.subarray(-AUTH_TAG_LENGTH);
+    const ciphertext = ciphertextWithTag.subarray(0, -AUTH_TAG_LENGTH);
 
-    const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv);
+    const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH });
     decipher.setAuthTag(authTag);
     parts.push(Buffer.concat([decipher.update(ciphertext), decipher.final()]));
 

@@ -125,7 +125,7 @@ export const DEFAULT_GENERATE_OPTIONS: Required<GenerateOptions> = {
   groupSize: 0,
 };
 
-const AMBIGUOUS = new Set([..."0O1lI"]);
+const AMBIGUOUS = new Set("0O1lI");
 
 /** Charset for a mode after applying exclusions */
 export function charsetFor(mode: KeygenMode, opts?: GenerateOptions): string[] {
@@ -133,7 +133,7 @@ export function charsetFor(mode: KeygenMode, opts?: GenerateOptions): string[] {
   let chars = [...CHARSETS[mode]];
   if (opts?.excludeAmbiguous) chars = chars.filter((c) => !AMBIGUOUS.has(c));
   if (opts?.excludeChars) {
-    const ex = new Set([...opts.excludeChars]);
+    const ex = new Set(opts.excludeChars);
     chars = chars.filter((c) => !ex.has(c));
   }
   return chars;
@@ -148,7 +148,7 @@ function sampleFrom(charset: string[], length: number, noRepeats: boolean): stri
     for (let i = 0; i < batch.length && out.length < length; i++) {
       if (batch[i] >= limit) continue;
       const c = charset[batch[i] % pool];
-      if (noRepeats && out.length > 0 && out[out.length - 1] === c) continue;
+      if (noRepeats && out.length > 0 && out.at(-1) === c) continue;
       out.push(c);
     }
   }
@@ -158,7 +158,7 @@ function sampleFrom(charset: string[], length: number, noRepeats: boolean): stri
 const CLASS_TESTS: [keyof PasswordAnalysis["classes"], RegExp][] = [
   ["lower", /[a-z]/],
   ["upper", /[A-Z]/],
-  ["digits", /[0-9]/],
+  ["digits", /\d/],
   ["symbols", /[!-/:-@[-`{-~]/],
 ];
 
@@ -275,34 +275,59 @@ function detectKeyboard(s: string): boolean {
   });
 }
 
-export function analyzePassword(password: string): PasswordAnalysis {
-  const chars = [...password];
-  const length = chars.length;
+type PasswordClasses = PasswordAnalysis["classes"];
 
-  const classes = {
+/** Which character classes the password draws from. */
+function classesOf(password: string, chars: string[]): PasswordClasses {
+  return {
     lower: /[a-z]/.test(password),
     upper: /[A-Z]/.test(password),
-    digits: /[0-9]/.test(password),
+    digits: /\d/.test(password),
     symbols: /[!-/:-@[-`{-~]/.test(password),
     extended: chars.some((c) => c.codePointAt(0)! > 0x7e),
   };
-  const classCount = Object.values(classes).filter(Boolean).length;
+}
 
-  let poolSize = 0;
-  if (classes.lower) poolSize += 26;
-  if (classes.upper) poolSize += 26;
-  if (classes.digits) poolSize += 10;
-  if (classes.symbols) poolSize += 33;
-  if (classes.extended) poolSize += 256; // conservative estimate for non-ASCII variety
+/** Per-class alphabet sizes an attacker would have to cover. */
+const CLASS_POOL_SIZES: [keyof PasswordClasses, number][] = [
+  ["lower", 26],
+  ["upper", 26],
+  ["digits", 10],
+  ["symbols", 33],
+  ["extended", 256], // conservative estimate for non-ASCII variety
+];
 
-  const entropyBits = length === 0 ? 0 : Math.round(Math.log2(Math.max(poolSize, 1)) * length);
+function poolSizeOf(classes: PasswordClasses): number {
+  return CLASS_POOL_SIZES.reduce((total, [name, size]) => (classes[name] ? total + size : total), 0);
+}
 
+/** Characters commonly tacked onto the end of a dictionary word. */
+const PADDING_CHARS = new Set("0123456789!@#$%.");
+
+/**
+ * Strip trailing padding (`password123!`) so the stem can be matched against the
+ * common-password list. Written as a scan rather than an end-anchored `+` regex,
+ * which backtracks quadratically on long inputs.
+ */
+function stripPadding(s: string): string {
+  let end = s.length;
+  while (end > 0 && PADDING_CHARS.has(s[end - 1])) end--;
+  return s.slice(0, end);
+}
+
+/** Structural weaknesses worth surfacing to the user. */
+function collectWarnings(
+  password: string,
+  length: number,
+  classes: PasswordClasses,
+  classCount: number
+): PasswordWarning[] {
   const warnings: PasswordWarning[] = [];
   const low = password.toLowerCase();
 
   if (length > 0 && length < 8) warnings.push("tooShort");
-  if (COMMON.has(low) || COMMON.has(low.replace(/[0-9!@#$%.]+$/u, ""))) warnings.push("common");
-  if (length > 0 && /^[0-9]+$/.test(password)) warnings.push("onlyDigits");
+  if (COMMON.has(low) || COMMON.has(stripPadding(low))) warnings.push("common");
+  if (length > 0 && /^\d+$/.test(password)) warnings.push("onlyDigits");
   else if (length > 0 && /^[a-zA-Z]+$/.test(password) && classCount === 1) warnings.push("onlyLetters");
   if (detectRepeats(password)) warnings.push("repeats");
   if (detectSequence(password)) warnings.push("sequence");
@@ -310,24 +335,46 @@ export function analyzePassword(password: string): PasswordAnalysis {
   if (/^(19|20)\d{2}/.test(password) || /(19|20)\d{2}$/.test(password)) warnings.push("datelike");
   if (length >= 8 && classCount === 1 && !classes.extended) warnings.push("lowVariety");
 
-  // Effective entropy: penalize structural weaknesses
-  let effectiveBits = entropyBits;
-  if (warnings.includes("common")) effectiveBits = Math.min(effectiveBits, 12);
-  if (warnings.includes("repeats")) effectiveBits = Math.round(effectiveBits * 0.6);
-  if (warnings.includes("sequence") || warnings.includes("keyboard")) effectiveBits = Math.round(effectiveBits * 0.7);
-  if (warnings.includes("datelike")) effectiveBits = Math.max(0, effectiveBits - 10);
+  return warnings;
+}
+
+/** Discount the raw entropy for every structural weakness found. */
+function penalize(entropyBits: number, warnings: PasswordWarning[]): number {
+  let bits = entropyBits;
+  if (warnings.includes("common")) bits = Math.min(bits, 12);
+  if (warnings.includes("repeats")) bits = Math.round(bits * 0.6);
+  if (warnings.includes("sequence") || warnings.includes("keyboard")) bits = Math.round(bits * 0.7);
+  if (warnings.includes("datelike")) bits = Math.max(0, bits - 10);
+  return bits;
+}
+
+/** Effective-bit thresholds for the 0–4 strength scale. */
+const SCORE_THRESHOLDS = [28, 40, 60, 80];
+
+function scoreFor(length: number, effectiveBits: number): PasswordAnalysis["score"] {
+  if (length === 0) return 0;
+  const index = SCORE_THRESHOLDS.findIndex((threshold) => effectiveBits < threshold);
+  return (index === -1 ? 4 : index) as PasswordAnalysis["score"];
+}
+
+export function analyzePassword(password: string): PasswordAnalysis {
+  const chars = [...password];
+  const length = chars.length;
+
+  const classes = classesOf(password, chars);
+  const classCount = Object.values(classes).filter(Boolean).length;
+  const poolSize = poolSizeOf(classes);
+
+  const entropyBits = length === 0 ? 0 : Math.round(Math.log2(Math.max(poolSize, 1)) * length);
+  const warnings = collectWarnings(password, length, classes, classCount);
+  const effectiveBits = penalize(entropyBits, warnings);
 
   const crackSeconds = {
     online: length === 0 ? 0 : Math.pow(2, effectiveBits - 1) / SPEEDS.online,
     offline: length === 0 ? 0 : Math.pow(2, effectiveBits - 1) / SPEEDS.offline,
   };
 
-  let score: PasswordAnalysis["score"];
-  if (length === 0 || effectiveBits < 28) score = 0;
-  else if (effectiveBits < 40) score = 1;
-  else if (effectiveBits < 60) score = 2;
-  else if (effectiveBits < 80) score = 3;
-  else score = 4;
+  const score = scoreFor(length, effectiveBits);
 
   return { length, poolSize, entropyBits, effectiveBits, classes, classCount, score, warnings, crackSeconds };
 }
