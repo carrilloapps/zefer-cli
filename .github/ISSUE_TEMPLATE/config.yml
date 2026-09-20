@@ -1,0 +1,20 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/carrilloapps/zefer-cli/tree/main/docs
+    about: Check the documentation before opening an issue
+  - name: Library API reference
+    url: https://github.com/carrilloapps/zefer-cli/blob/main/docs/LIBRARY.md
+    about: Programmatic usage — encodeZefer, decodeZefer, generateWithOptions, analyzePassword
+  - name: MCP integration guide
+    url: https://github.com/carrilloapps/zefer-cli/blob/main/docs/MCP.md
+    about: Using zefer-cli as a Model Context Protocol server
+  - name: Security Vulnerability
+    url: https://github.com/carrilloapps/zefer-cli/security/advisories/new
+    about: Report security vulnerabilities privately via GitHub Security Advisories
+  - name: Questions & Discussions
+    url: https://github.com/carrilloapps/zefer-cli/discussions
+    about: Ask questions and share ideas
+  - name: Web app
+    url: https://zefer.carrillo.app
+    about: The browser companion — same .zefer format, same crypto parameters
