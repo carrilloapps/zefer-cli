@@ -27,17 +27,37 @@ npm run typecheck    # TypeScript strict check (no errors expected)
 
 ### Test your changes
 
+Two suites, both required before opening a pull request:
+
 ```bash
-# Build
+npm test                 # Vitest unit suite (src/**/__tests__)
+npm run test:watch       # the same suite in watch mode
+npm run test:coverage    # unit suite + coverage gate
+npm run test:integration # scripts/test.mjs — 96 checks across CLI, MCP and library
+npm run verify           # lint + typecheck + build + both suites
+```
+
+**Coverage is enforced at 100%** for statements, branches, functions and lines
+over all of `src/**` (`vitest.config.ts`). Lowering a threshold, excluding a
+file or adding a `v8 ignore` hint is not an accepted way to make the gate pass:
+write the missing test, or delete the unreachable code.
+
+Unit tests live next to the code they cover, in `__tests__` directories. Ink
+components are rendered with `ink-testing-library`; the MCP server is driven
+through its real stdio JSON-RPC loop over a fake stdin/stdout pair.
+
+The integration suite (`scripts/test.mjs`) is deliberately kept separate: it
+builds the package and exercises the shipped binary, the MCP server and the
+published library, including cross-channel compatibility. Coverage is not
+measured there.
+
+You can also try a change by hand:
+
+```bash
 npm run build
-
-# Encrypt a file
 node dist/index.js encrypt <your-file> -p testpass
-
-# Decrypt it back
 node dist/index.js decrypt <your-file>.zefer -p testpass --force
-
-# Verify output matches the original
+# Verify the output matches the original
 ```
 
 ## Project Structure
@@ -47,8 +67,11 @@ src/
   commands/       # One file per CLI command (Ink React components)
   lib/            # Core crypto libraries (Node.js ports of zefer/app/lib/)
   ui/             # Reusable Ink components (Header, ProgressBar, Spinner, StatusLine)
-  utils/          # Shared utilities (format, prompt, terminal detection)
+  utils/          # Shared utilities (format, prompt, path safety, terminal detection)
+  mcp/            # MCP stdio server (JSON-RPC over stdin/stdout)
+  lib.ts          # Programmatic library entry point (ESM + CJS)
   index.ts        # CLI entry point (Commander setup)
+  **/__tests__/   # Vitest unit suites, alongside the code they cover
 ```
 
 ## Conventions
@@ -127,14 +150,14 @@ server and the library).
 
 ## Releasing a New Version
 
-Publishing is automated via GitHub Actions. See the full process in [docs/RELEASING.md](RELEASING.md).
+See the full process in [docs/RELEASING.md](RELEASING.md).
 
 **Quick summary:**
 1. `npm version patch|minor|major`
 2. Update `CHANGELOG.md`, then `git commit --amend --no-edit`
 3. `git push origin main --tags`
-4. `gh release create v<version> --generate-notes`
-5. GitHub Actions publishes to npm automatically
+4. `npm publish --otp=XXXXXX` — publishing is manual; there is no npm token in CI
+5. `gh release create v<version> --generate-notes` — this triggers `binaries.yml`, which builds and attaches the standalone binaries
 
 ## Security Contributions
 

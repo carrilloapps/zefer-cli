@@ -10,6 +10,8 @@ CLI companion to [zefer.carrillo.app](https://zefer.carrillo.app). Encrypt and d
 
 [![npm](https://img.shields.io/npm/v/zefer-cli?style=flat-square&color=22c55e)](https://www.npmjs.com/package/zefer-cli)
 [![CI](https://img.shields.io/github/actions/workflow/status/carrilloapps/zefer-cli/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/carrilloapps/zefer-cli/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-498%20unit%20%2B%2096%20integration-22c55e?style=flat-square)](https://github.com/carrilloapps/zefer-cli/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-22c55e?style=flat-square)](https://github.com/carrilloapps/zefer-cli/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/carrilloapps/zefer-cli?style=flat-square&color=22c55e)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -699,8 +701,12 @@ src/
     StatusLine.tsx    # Combined status + progress
   utils/
     format.ts         # File sizes, dates, durations
+    paths.ts          # Path sanitization (anti path-traversal / zip-slip)
     prompt.ts         # Password input (cross-platform)
     terminal.ts       # Unicode / ASCII capability detection
+  **/__tests__/       # Vitest unit suites (498 tests, 100% coverage)
+scripts/
+  test.mjs            # Integration suite — 96 checks across CLI, MCP and library
 dist/
   index.js            # CLI/MCP bundle (ESM, includes shebang) — the bin
   lib.js / lib.cjs    # Library bundles (ESM + CommonJS)
@@ -711,7 +717,15 @@ docs/
   LIBRARY.md          # Programmatic library / SDK reference
   MCP.md              # MCP integration guide
   SECURITY.md         # Threat model + cryptographic details
-  RELEASING.md        # npm token setup, GitHub Actions, version workflow
+  RELEASING.md        # Release process, version workflow, binary pipeline
+.github/
+  workflows/
+    ci.yml            # lint + typecheck + coverage gate + integration, Node 20 & 22
+    security.yml      # Monthly Semgrep, Trivy, Gitleaks, SonarQube → Code scanning
+    binaries.yml      # Standalone binaries on every published release
+  dependabot.yml      # Monthly npm + GitHub Actions updates
+AGENTS.md             # Guide for AI agents using or editing this repository
+CLAUDE.md             # Repository working context
 ```
 
 ## Security Model
@@ -742,10 +756,25 @@ Contributions are welcome. Please read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.
 git clone https://github.com/carrilloapps/zefer-cli.git
 cd zefer-cli
 npm install
-npm run dev          # Run directly with tsx (no build step)
-npm run build        # Compile to dist/
-npm run typecheck    # TypeScript type check
+npm run dev              # Run directly with tsx (no build step)
+npm run build            # Compile to dist/ (CLI/MCP bundle + ESM & CJS library)
+npm run lint             # ESLint (flat config) — zero errors, zero warnings
+npm run typecheck        # TypeScript type check
+npm run test:coverage    # 498 unit tests behind the 100% coverage gate
+npm run test:integration # 96 checks across CLI, MCP and library
+npm run verify           # everything above, in order
 ```
+
+### Testing
+
+| Suite | Command | What it covers |
+|---|---|---|
+| Unit | `npm test` / `npm run test:coverage` | 498 tests across 23 files in `src/**/__tests__`. Coverage enforced at **100%** on statements, branches, functions and lines |
+| Integration | `npm run test:integration` | 96 checks that build the package and drive the shipped binary, the real MCP stdio server and the published library, including the full cross-channel matrix |
+
+Both run in CI on Node.js 20 and 22 (`.github/workflows/ci.yml`). A monthly
+`security.yml` run feeds Semgrep, Trivy, Gitleaks and SonarQube findings into
+GitHub Code scanning.
 
 ## Author
 

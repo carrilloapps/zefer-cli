@@ -20,7 +20,9 @@ The `prepublishOnly` script runs `typecheck + build + verify` automatically befo
 
 ## Publishing a new version
 
-Once the secret is set, every GitHub Release triggers an automatic publish.
+There is no npm token in CI and no publish workflow: `npm publish` is run by
+hand (step 4). A published GitHub Release triggers only the **binary build**
+(`binaries.yml`).
 
 ### Step 1 — Bump the version
 
@@ -116,17 +118,35 @@ node scripts/build-binaries.mjs
 
 ## What CI checks on every push
 
-The `ci.yml` workflow runs on every push and PR to `main`:
+The `ci.yml` workflow runs on every push and PR to `main`, on Node.js 20 and 22:
 
-| Check | What it verifies |
-|---|---|
-| Typecheck | `tsc --noEmit` — zero TypeScript errors |
-| Build | `tsup` — clean ESM bundle produced |
-| Smoke: help | `zefer --help` exits 0 |
-| Smoke: keygen | `zefer keygen --mode hex --length 32` produces output |
-| Smoke: roundtrip | Encrypt a file, decrypt it, `diff` verifies identical output |
+| Check | Command | What it verifies |
+|---|---|---|
+| Install | `npm ci` | Lockfile installed as-is (never `npm update` — npm 10.9.x has an Arborist `edgesOut` bug when re-resolving the tree) |
+| Lint | `npm run lint` | ESLint flat config — zero errors, zero warnings |
+| Typecheck | `npm run typecheck` | `tsc --noEmit` — zero TypeScript errors |
+| Unit tests | `npm run test:coverage` | 498 tests, **100%** statements / branches / functions / lines |
+| Integration | `npm run test:integration` | 96 checks across the CLI, the MCP server and the library, including the cross-channel matrix |
 
-Tested on Node.js 20 and 22.
+`npm run verify` runs the same sequence locally, plus the build, and is what
+`prepublishOnly` executes before an npm publish.
+
+## Monthly security sweep
+
+`security.yml` runs on a monthly cron and on manual dispatch: Semgrep, Trivy,
+Gitleaks and SonarQube. The first three upload SARIF, so findings appear under
+**Security → Code scanning**. SonarQube is skipped cleanly when `SONAR_TOKEN` /
+`SONAR_HOST_URL` are not configured, so the workflow never fails for a missing
+secret.
+
+`dependabot.yml` opens monthly dependency PRs for npm and GitHub Actions:
+minor and patch updates grouped into one PR, majors isolated in their own. There
+are deliberately no `ignore:` rules — Dependabot applies them to security
+updates as well, so ignoring majors would silence a CVE whose only patch ships
+in a major release.
+
+All actions in every workflow are pinned to a full commit SHA with the tag in a
+trailing comment. Replacing a pin with a mutable tag is a regression.
 
 ---
 
@@ -147,7 +167,9 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 | File | What to change |
 |---|---|
-| `CHANGELOG.md` | Add new version section |
+| `CHANGELOG.md` | Add new version section + compare link |
 | `package.json` | Version bumped automatically by `npm version` |
+| `README.md` | Only if a command, flag, keygen mode or library export changed |
+| `docs/LIBRARY.md` | Only if the exported API surface changed |
 
 Unlike the web app, there are no social preview images or JSON-LD schemas to update.

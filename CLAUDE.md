@@ -1,6 +1,10 @@
-# zefer-cli — Claude Code Context
+# zefer-cli — Repository Context
 
-This file provides context for Claude Code when working in this repository.
+This file is the working context for coding agents in this repository.
+[`AGENTS.md`](AGENTS.md) is the companion guide: what zefer-cli *is*, how to use
+its three channels, and the rules for editing it. This file covers the
+day-to-day mechanics — key files, invariants and the mistakes that keep
+recurring.
 
 ## What this project is
 
@@ -40,10 +44,12 @@ src/lib/passwords.ts          — CSPRNG key generation (7 modes) + password str
 src/lib/attempts.ts           — ~/.zefer/attempts.json (replaces localStorage)
 src/utils/terminal.ts         — Unicode/ASCII capability detection
 src/utils/prompt.ts           — Cross-platform password input
+src/utils/paths.ts            — Path sanitization (anti path-traversal / zip-slip)
 src/commands/encrypt.tsx      — Ink UI for encrypt command
 src/commands/decrypt.tsx      — Ink UI for decrypt command
 src/commands/keygen.tsx       — Ink UI for keygen command
 src/commands/info.tsx         — Ink UI for info command
+src/**/__tests__/             — Vitest unit suites, alongside the code they cover
 ```
 
 ## Build and run
@@ -54,6 +60,13 @@ npm run build:cli    # CLI/MCP bundle only
 npm run build:lib    # library bundle only (ESM + CJS + types)
 npm run dev          # tsx src/index.ts (no build step)
 npm run typecheck    # tsc --noEmit (should have 0 errors)
+npm run lint         # eslint . (flat config, should have 0 errors and 0 warnings)
+
+npm test             # vitest run — unit suite (src/**/__tests__)
+npm run test:watch   # vitest in watch mode
+npm run test:coverage      # vitest run --coverage (statements/branches/functions/lines = 100)
+npm run test:integration   # node scripts/test.mjs — 96 checks across CLI + MCP + library
+npm run verify       # lint + typecheck + build + coverage + integration
 
 node dist/index.js --help
 node dist/index.js keygen
@@ -139,15 +152,26 @@ export function FooApp(opts: FooOptions) {
 5. Using `setRawMode` without checking if it exists — it's not available in all terminals
 6. Writing to stdout before Ink exits — use `globalThis.__zefer_stdout_content` pattern for text-mode decrypt
 7. Forgetting `--force` check before `fs.writeFileSync` to avoid silently overwriting files
+8. Building an output path from `meta.fileName` without `src/utils/paths.ts` — the filename comes from the encrypted payload and is attacker-controlled (zip-slip)
+9. Omitting `authTagLength` on `createCipheriv` / `createDecipheriv` in GCM mode
+10. Trusting an MCP argument's type — JSON-RPC values arrive untyped; coerce with `asString()` before using one as a passphrase or a path
 
 ## CI / CD
 
-Two GitHub Actions workflows:
+Three GitHub Actions workflows, plus Dependabot:
 
 | File | Trigger | What it does |
 |---|---|---|
-| `.github/workflows/ci.yml` | Push / PR to `main` | Typecheck + build + 26 smoke tests on Node 20 & 22 |
+| `.github/workflows/ci.yml` | Push / PR to `main` | `npm ci` → lint → typecheck → unit suite at 100% coverage → 96 integration checks, on Node 20 & 22 |
+| `.github/workflows/security.yml` | Monthly cron + `workflow_dispatch` | Semgrep, Trivy, Gitleaks and SonarQube. The first three upload SARIF to GitHub Code scanning; SonarQube skips cleanly when `SONAR_TOKEN` / `SONAR_HOST_URL` are unset |
 | `.github/workflows/binaries.yml` | GitHub Release published | Builds and uploads standalone binaries for all platforms |
+| `.github/dependabot.yml` | Monthly | npm + GitHub Actions updates. Two groups per ecosystem: `minor-patch` in one PR, `major` isolated. **No `ignore:` rules** — Dependabot applies them to security updates too, so ignoring majors would silence a CVE only patched in a major |
+
+Every action is pinned to a **full commit SHA** with the tag in a trailing
+comment (Semgrep `github-actions-mutable-action-tag`). Do not replace a pin with
+a tag. In CI use `npm ci` only: npm 10.9.x hits an Arborist bug
+(`Cannot read properties of null (reading 'edgesOut')`) when it re-resolves the
+dependency tree.
 
 **To release:**
 1. `npm version patch|minor|major` — bumps `package.json`, commits, tags, auto-pushes
